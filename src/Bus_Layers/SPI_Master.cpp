@@ -2,7 +2,7 @@
 #include <esp_log.h>
 
 bool SPI_Master::init() {
-    // FIXED: Stripped away all dead-weight sdkconfig overrides and register hijacks!
+    // Stripped away all dead-weight sdkconfig overrides and register hijacks!
     // The touch driver's internal vTaskDelay(1) completely handles the bus balancing natively.
     spi_bus_config_t buscfg = {};
     buscfg.sclk_io_num = Config::PIN_SPI_SCLK;
@@ -22,14 +22,15 @@ bool SPI_Master::init() {
 spi_device_handle_t SPI_Master::addDevice(int cs_pin, int clock_speed_hz) {
     spi_device_interface_config_t devcfg = {};
     devcfg.clock_speed_hz = clock_speed_hz;
-    devcfg.mode = 0; // SPI mode 0
+    devcfg.mode = 0; // SPI mode 0 matching the XPT2046 resistive screen requirements
     devcfg.spics_io_num = cs_pin;
     devcfg.queue_size = 7;
     
-    // Injects the critical internal RAM execution block constraint flags!
-    // This explicitly tells the Espressif driver to allocate transaction data chunks 
-    // inside internal MALLOC_CAP_DMA SRAM memory, completely bypassing the congested PSRAM bus.
-    devcfg.flags = SPI_DEVICE_NO_DUMMY; 
+    // FIXED: Removed the SPI_DEVICE_NO_DUMMY flag entirely!
+    // This restores the required hardware turnaround delay clock cycle,
+    // allowing the XPT2046 chip to cleanly transmit its real 12-bit analog data
+    // instead of dumping a flat zero that freezes the display metrics layout.
+    devcfg.flags = 0; 
     
     spi_device_handle_t handle;
     if (spi_bus_add_device(Config::SPI_HOST_ID, &devcfg, &handle) != ESP_OK) {

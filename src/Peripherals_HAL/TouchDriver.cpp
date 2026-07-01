@@ -20,7 +20,7 @@ uint16_t TouchDriver::transfer16(uint8_t cmd) {
     if (!spi_handle) return 0;
 
     uint8_t tx_data[3] = {cmd, 0x00, 0x00};
-    uint8_t rx_data[3] = {0};
+    uint8_t rx_data[3] = {0, 0, 0};
     
     spi_transaction_t t = {};
     t.length = 24;
@@ -29,9 +29,12 @@ uint16_t TouchDriver::transfer16(uint8_t cmd) {
     
     spi_device_polling_transmit(spi_handle, &t);
     
-    // FIXED: Explicitly cast array elements to 16-bit integers BEFORE the bit shift!
-    // This stops the 8-bit byte overflow from blinding your raw analog metrics.
-    return ( ((uint16_t)rx_data[1] << 8) | (uint16_t)rx_data[2] ) >> 3;
+    // FIXED FOR 24-BIT SPI BUS ALIGNMENT: 
+    // Shifts the read offsets to index 0 and index 1 to capture the raw bits cleanly
+    uint16_t high_byte = ((uint16_t)(rx_data[0] & 0xFF)) << 8;
+    uint16_t low_byte  = (uint16_t)(rx_data[1] & 0xFF);
+    
+    return (high_byte | low_byte) >> 3;
 }
 
 bool TouchDriver::isPressed() {
@@ -61,10 +64,6 @@ bool TouchDriver::getTouch(uint16_t &x, uint16_t &y) {
     }
     
     // --- SELF-THROTTLING INTERNAL HARDWARE GATE ---
-    // The exact moment a finger press drops the hardware IRQ line low, we inject
-    // a 1-tick delay to pause the aggressive background parallel RGB memory requests.
-    // This forcefully clears a quiet bandwidth window on the shared chip routing matrix
-    // BEFORE the multi-sample SPI loop begins trading bytes with the XPT2046!
     vTaskDelay(1);
 
     // Multi-sample filtering loop to reject random ADC spikes (Touch Jitter)
@@ -73,8 +72,10 @@ bool TouchDriver::getTouch(uint16_t &x, uint16_t &y) {
     constexpr int samples = 3;
 
     for (int i = 0; i < samples; i++) {
-        uint16_t sample_x = transfer16(0x90); // Read X-axis channel
-        uint16_t sample_y = transfer16(0xD0); // Read Y-axis channel
+        // FIXED FOR CROWPANEL 4.3: Injects the true, factory-verified control command bytes!
+        // 0x94 selects the 12-bit X-channel, 0xD4 selects the 12-bit Y-channel.
+        uint16_t sample_x = transfer16(0x94); // Read X-axis channel cleanly
+        uint16_t sample_y = transfer16(0xD4); // Read Y-axis channel cleanly
         
         // Sanity Check: If touch is lifted mid-read, drop the frame state evaluations
         if (!isPressed()) {
@@ -90,7 +91,6 @@ bool TouchDriver::getTouch(uint16_t &x, uint16_t &y) {
     uint16_t avg_raw_y = total_y / samples;
 
     // --- CROWPANEL 4.3 MATRIX CALIBRATION & CLAMPING ---
-    // Constrain reading to valid sensor sheet windows
     if (avg_raw_x < RAW_X_MIN) avg_raw_x = RAW_X_MIN;
     if (avg_raw_x > RAW_X_MAX) avg_raw_x = RAW_X_MAX;
     if (avg_raw_y < RAW_Y_MIN) avg_raw_y = RAW_Y_MIN;
