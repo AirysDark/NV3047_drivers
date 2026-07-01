@@ -6,7 +6,7 @@ void NV3047_Driver::begin(NV3047* hw_instance) {
     
     if (hardware) {
         hardware->init();
-        setBrightness(100); // FIXED: Maps cleanly to your updated 0-100% percentage scaling API
+        setBrightness(128); // Matches your original bare-metal setup level cleanly
     }
 }
 
@@ -28,6 +28,12 @@ void NV3047_Driver::fillScreen(uint16_t color) {
     if (hardware) {
         // Leverages your high-performance 32-bit clearing blocks directly
         hardware->getCanvas().clear(color);
+        
+        // --- FIXED: AUTOMATIC SWAP FOR BARE-METAL SKETCHES ---
+        // Forces the double-buffered canvas to flip straight to the display glass.
+        // This immediately releases the memory lock and opens the SPI clock lines wide 
+        // so your updated self-throttling touch driver can read your finger normally!
+        hardware->getCanvas().swap();
     }
 }
 

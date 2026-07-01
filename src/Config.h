@@ -38,7 +38,7 @@ namespace Config {
     constexpr int PIN_BACKLIGHT = 2;
 
     // SPI Touch Pins (XPT2046 Dedicated Pinouts)
-    constexpr spi_host_device_t SPI_HOST_ID = SPI2_HOST;
+    constexpr spi_host_device_t SPI_HOST_ID = SPI3_HOST;
     constexpr int PIN_SPI_SCLK  = 20; 
     constexpr int PIN_SPI_MOSI  = 19; 
     constexpr int PIN_SPI_MISO  = -1; 
@@ -54,6 +54,8 @@ namespace Config {
     // Dropping the PCLK to 6MHz gives the unshielded PCB copper traces
     // plenty of time to clear, completely straightening the jagged middle artifacts.
     constexpr int PCLK_FREQ_HZ = 6000000; // Lowered to 6MHz for trace stability
+
+
     
     constexpr uint16_t HSYNC_BACK_PORCH  = 43;
     constexpr uint16_t HSYNC_FRONT_PORCH = 8;

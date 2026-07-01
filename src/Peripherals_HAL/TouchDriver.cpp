@@ -29,8 +29,9 @@ uint16_t TouchDriver::transfer16(uint8_t cmd) {
     
     spi_device_polling_transmit(spi_handle, &t);
     
-    // Extract 12-bit conversion value safely from SPI registers
-    return ((rx_data[1] << 8) | rx_data[2]) >> 3;
+    // FIXED: Explicitly cast array elements to 16-bit integers BEFORE the bit shift!
+    // This stops the 8-bit byte overflow from blinding your raw analog metrics.
+    return ( ((uint16_t)rx_data[1] << 8) | (uint16_t)rx_data[2] ) >> 3;
 }
 
 bool TouchDriver::isPressed() {
@@ -38,7 +39,7 @@ bool TouchDriver::isPressed() {
     return gpio_get_level((gpio_num_t)Config::PIN_TOUCH_IRQ) == 0;
 }
 
-// --- NEW STATE TRIGGER EVALUATORS ---
+// --- STATE TRIGGER EVALUATORS ---
 
 bool TouchDriver::isNewPress() {
     // True ONLY on the exact frame the contact goes from unpressed to pressed
@@ -59,6 +60,13 @@ bool TouchDriver::getTouch(uint16_t &x, uint16_t &y) {
         return false; // Hardware pin reports no contact
     }
     
+    // --- SELF-THROTTLING INTERNAL HARDWARE GATE ---
+    // The exact moment a finger press drops the hardware IRQ line low, we inject
+    // a 1-tick delay to pause the aggressive background parallel RGB memory requests.
+    // This forcefully clears a quiet bandwidth window on the shared chip routing matrix
+    // BEFORE the multi-sample SPI loop begins trading bytes with the XPT2046!
+    vTaskDelay(1);
+
     // Multi-sample filtering loop to reject random ADC spikes (Touch Jitter)
     uint32_t total_x = 0;
     uint32_t total_y = 0;
@@ -81,7 +89,7 @@ bool TouchDriver::getTouch(uint16_t &x, uint16_t &y) {
     uint16_t avg_raw_x = total_x / samples;
     uint16_t avg_raw_y = total_y / samples;
 
-    // --- CROWPANEL 4.3 MATRIC CALIBRATION & CLAMPING ---
+    // --- CROWPANEL 4.3 MATRIX CALIBRATION & CLAMPING ---
     // Constrain reading to valid sensor sheet windows
     if (avg_raw_x < RAW_X_MIN) avg_raw_x = RAW_X_MIN;
     if (avg_raw_x > RAW_X_MAX) avg_raw_x = RAW_X_MAX;

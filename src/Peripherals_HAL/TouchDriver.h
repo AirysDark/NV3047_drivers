@@ -2,6 +2,12 @@
 #include "../Config.h"
 #include <driver/spi_master.h>
 
+// --- REQUIRED OPERATING SYSTEM HEADERS ---
+// Pulls in the core task pacing functions (vTaskDelay) to give us the power 
+// to throttle background memory bus traffic directly from inside this driver!
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+
 class TouchDriver {
 private:
     spi_device_handle_t spi_handle;
