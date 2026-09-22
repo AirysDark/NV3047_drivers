@@ -70,33 +70,76 @@ namespace Config {
     constexpr int PIN_BACKLIGHT = 2;
 
     // ============================================================
-    // SHARED PERIPHERAL SPI BUS + TOUCH PINS
+    // TOUCH / PERIPHERAL SPI PROFILE
     // ============================================================
-    // PCB silkscreen + Elecrow V2.1 definition:
-    // IO12 = TP_CLK, IO11 = TP_DIN, IO13 = TP_OUT,
-    // IO0  = TP_CS,  IO36 = TP_IRQ.
+    // LEGACY_WORKING preserves the original main-branch touch wiring:
+    //   SCLK=20, MOSI=19, MISO=-1, TP_CS=18, TP_IRQ=36.
     //
-    // TF/microSD shares the same clock/data lines with its own CS on IO10.
-    constexpr int PIN_SHARED_SPI_SCLK = 12;
-    constexpr int PIN_SHARED_SPI_MOSI = 11;
-    constexpr int PIN_SHARED_SPI_MISO = 13;
+    // V21_MATRIX_TEST uses the photographed/published V2.1 shared bus:
+    //   SCLK=12, MOSI=11, MISO=13, TP_CS=0, TP_IRQ=36.
+    //   TF/microSD shares those clock/data lines with CS on GPIO10.
+    constexpr int PIN_LEGACY_TOUCH_SCLK = 20;
+    constexpr int PIN_LEGACY_TOUCH_MOSI = 19;
+    constexpr int PIN_LEGACY_TOUCH_MISO = -1;
+    constexpr int PIN_LEGACY_TOUCH_CS   = 18;
 
-    constexpr int PIN_TOUCH_CS  = 0;
+    constexpr int PIN_V21_SHARED_SPI_SCLK = 12;
+    constexpr int PIN_V21_SHARED_SPI_MOSI = 11;
+    constexpr int PIN_V21_SHARED_SPI_MISO = 13;
+    constexpr int PIN_V21_TOUCH_CS        = 0;
+    constexpr int PIN_V21_SD_CS           = 10;
+
+    constexpr int PIN_SPI_SCLK =
+        RGB_V21_MATRIX_ACTIVE
+            ? PIN_V21_SHARED_SPI_SCLK
+            : PIN_LEGACY_TOUCH_SCLK;
+
+    constexpr int PIN_SPI_MOSI =
+        RGB_V21_MATRIX_ACTIVE
+            ? PIN_V21_SHARED_SPI_MOSI
+            : PIN_LEGACY_TOUCH_MOSI;
+
+    constexpr int PIN_SPI_MISO =
+        RGB_V21_MATRIX_ACTIVE
+            ? PIN_V21_SHARED_SPI_MISO
+            : PIN_LEGACY_TOUCH_MISO;
+
+    constexpr int PIN_TOUCH_CS =
+        RGB_V21_MATRIX_ACTIVE
+            ? PIN_V21_TOUCH_CS
+            : PIN_LEGACY_TOUCH_CS;
+
     constexpr int PIN_TOUCH_IRQ = 36;
 
-    // Backward-compatible aliases used by existing bus-layer code.
-    constexpr int PIN_SPI_SCLK = PIN_SHARED_SPI_SCLK;
-    constexpr int PIN_SPI_MOSI = PIN_SHARED_SPI_MOSI;
-    constexpr int PIN_SPI_MISO = PIN_SHARED_SPI_MISO;
+    // Backward-compatible V2.1 shared-bus names.
+    constexpr int PIN_SHARED_SPI_SCLK = PIN_V21_SHARED_SPI_SCLK;
+    constexpr int PIN_SHARED_SPI_MOSI = PIN_V21_SHARED_SPI_MOSI;
+    constexpr int PIN_SHARED_SPI_MISO = PIN_V21_SHARED_SPI_MISO;
 
     // ============================================================
     // MICRO-SD (TF) CARD PINS
     // ============================================================
-    // TF shares the SPI data/clock bus with touch and has an independent CS.
-    constexpr int PIN_SD_CS   = 10;
-    constexpr int PIN_SD_CLK  = PIN_SHARED_SPI_SCLK;
-    constexpr int PIN_SD_MOSI = PIN_SHARED_SPI_MOSI;
-    constexpr int PIN_SD_MISO = PIN_SHARED_SPI_MISO;
+    // TF belongs to the V2.1 hardware profile. Legacy mode deliberately
+    // leaves it unconfigured so the old main-branch peripheral map is preserved.
+    constexpr int PIN_SD_CS =
+        RGB_V21_MATRIX_ACTIVE
+            ? PIN_V21_SD_CS
+            : -1;
+
+    constexpr int PIN_SD_CLK =
+        RGB_V21_MATRIX_ACTIVE
+            ? PIN_V21_SHARED_SPI_SCLK
+            : -1;
+
+    constexpr int PIN_SD_MOSI =
+        RGB_V21_MATRIX_ACTIVE
+            ? PIN_V21_SHARED_SPI_MOSI
+            : -1;
+
+    constexpr int PIN_SD_MISO =
+        RGB_V21_MATRIX_ACTIVE
+            ? PIN_V21_SHARED_SPI_MISO
+            : -1;
 
     // ============================================================
     // EXTERNAL EXPANSION / BOARD SILKSCREEN PINS
@@ -107,6 +150,11 @@ namespace Config {
 
         constexpr int GPIO_D0 = 38;
         constexpr int GPIO_D1 = 37;
+
+        // Legacy touch uses GPIO18 as TP_CS, so UART1_RX is only free in V2.1.
+        constexpr bool UART1_RX_AVAILABLE =
+            RGB_V21_MATRIX_ACTIVE;
+        constexpr bool UART1_TX_AVAILABLE = true;
 
         // Proposed V2.1 RGB profile consumes GPIO38 as LCD G5.
         constexpr bool GPIO_D0_AVAILABLE =
@@ -121,6 +169,13 @@ namespace Config {
         constexpr int LRCLK = 19;
         constexpr int BCLK  = 35;
         constexpr int SDIN  = 20;
+
+        // Legacy touch consumes GPIO19 (MOSI) and GPIO20 (SCLK).
+        constexpr bool LRCLK_AVAILABLE =
+            RGB_V21_MATRIX_ACTIVE;
+        constexpr bool BCLK_AVAILABLE = true;
+        constexpr bool SDIN_AVAILABLE =
+            RGB_V21_MATRIX_ACTIVE;
     }
 
     // ============================================================
@@ -207,8 +262,11 @@ namespace Config {
     // SD CARD CONFIGURATION
     // ============================================================
     namespace SDCard {
-        constexpr bool ENABLED = true;
-        constexpr bool SHARES_TOUCH_SPI_BUS = true;
+        // SD/TF is part of the V2.1 peripheral profile, not the old main map.
+        constexpr bool ENABLED =
+            RGB_V21_MATRIX_ACTIVE;
+        constexpr bool SHARES_TOUCH_SPI_BUS =
+            RGB_V21_MATRIX_ACTIVE;
 
         // Selecting the V2.1 RGB matrix profile also brings the onboard
         // TF interface up automatically. A missing card is non-fatal.
@@ -227,9 +285,11 @@ namespace Config {
 
         static_assert(CLOCK_HZ > 0, "SD card SPI clock must be greater than zero");
         static_assert(MAX_OPEN_FILES > 0, "SD card must allow at least one open file");
-        static_assert(PIN_SD_CS >= 0, "TF chip-select GPIO must be configured");
         static_assert(
-            PIN_SD_CS != PIN_TOUCH_CS,
+            !ENABLED || PIN_SD_CS >= 0,
+            "Enabled TF profile requires a chip-select GPIO");
+        static_assert(
+            !ENABLED || PIN_SD_CS != PIN_TOUCH_CS,
             "TF and touch require independent chip-select GPIOs");
     }
 
