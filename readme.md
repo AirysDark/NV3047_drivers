@@ -2,7 +2,7 @@
 
 A low-level display, touch, framebuffer, and hardware abstraction driver for the **Elecrow CrowPanel 4.3" DIS06043H** on the **ESP32-S3**.
 
-This branch is intentionally built around **Arduino-ESP32 core 2.0.17**. The 6 MHz RGB configuration and non-standard colour-bank mapping remain the known-working display setup. Touch, expansion, and I2S pin assignments are now based directly on the silkscreen photographed on the actual PCB.
+This branch is intentionally built around **Arduino-ESP32 core 2.0.17**. The driver now has one fixed hardware configuration: the established Legacy Working display baseline from the original `main` implementation. There is no selectable hardware-profile system. A separate suspected V2.1 mapping is retained later in this README for reference only and is not compiled into the driver.
 
 ## What changed in v2
 
@@ -18,11 +18,11 @@ This branch is intentionally built around **Arduino-ESP32 core 2.0.17**. The 6 M
 - Standardized application brightness usage to `0-100%`.
 - Added framebuffer memory and frame timing diagnostics.
 - Reused the DisplayDriver DMA fill buffer instead of allocating/freeing it on every fill.
-- Reduced the touch SPI queue to the single slot required by polling transfers.
+- Restored the dedicated ESP-IDF XPT2046 touch transport used by the Legacy Working baseline.
+- Removed the selectable hardware-profile system so there is one unambiguous active pin map.
 - Updated stale examples and package metadata.
-- Made touch SPI pinning profile-aware: `LEGACY_WORKING` preserves the original `main` pins, while `V21_MATRIX_TEST` uses the V2.1 PCB pinout.
-- Documented PCB-verified UART1, GPIO_D and I2S pins.
-- Added shared-bus SD/TF support with independent TF chip-select, runtime safe-removal, and one SPI mutex shared with XPT2046 touch.
+- Documented PCB UART1, GPIO_D and I2S pin conflicts against the fixed active map.
+- Kept the suspected V2.1 RGB/touch/TF mapping as documentation only for later hardware investigation.
 
 ## Single-source configuration
 
@@ -44,13 +44,13 @@ The known-working defaults remain the same: Arduino-ESP32 **2.0.17**, 6 MHz PCLK
 
 ## Important colour mapping note
 
-The default `LEGACY_WORKING` profile is **not treated as textbook RGB565**, because hardware testing with that GPIO map required green/blue compensation:
+The fixed Legacy Working baseline is **not treated as textbook RGB565**, because hardware testing with that GPIO map required green/blue compensation:
 
 - red on the upper 5-bit bank,
 - physical blue on the middle 6-bit bank,
 - physical green on the lower 5-bit bank.
 
-For `LEGACY_WORKING`:
+For the active fixed configuration:
 
 ```cpp
 Config::COLOR_RED   = 0xF800;
@@ -58,7 +58,7 @@ Config::COLOR_GREEN = 0x001F;
 Config::COLOR_BLUE  = 0x07E0;
 ```
 
-This does **not** prove that the panel itself has a non-standard native colour format. The compensated colours may instead be masking an incorrect GPIO/data-lane assignment. That is exactly what the opt-in `V21_MATRIX_TEST` profile is designed to test; it switches to standard RGB565 together with the proposed V2.1 lane map.
+This does **not** prove that the panel itself has a non-standard native colour format. The compensated colours may instead be masking an incorrect GPIO/data-lane assignment. The suspected V2.1 mapping documented below is retained specifically as a future hardware-check reference, but it is not an active code path.
 
 For generated colours, use:
 
@@ -155,54 +155,37 @@ Recommended board settings:
 
 With the default configuration, PSRAM is required for the full-size application framebuffer pool.
 
-## Selectable RGB profiles
+## Current fixed hardware configuration
 
-The driver now contains two compile-time RGB GPIO-matrix profiles in `Config.h`.
+The driver no longer contains selectable hardware profiles. The active code directly uses the established **Legacy Working baseline**.
 
-The default remains the known-working profile:
-
-```cpp
-constexpr RGBProfile ACTIVE_RGB_PROFILE =
-    RGBProfile::LEGACY_WORKING;
-```
-
-Available values:
-
-```cpp
-RGBProfile::LEGACY_WORKING
-RGBProfile::V21_MATRIX_TEST
-```
-
-### LEGACY_WORKING
-
-This preserves the original `main` hardware baseline.
-
-RGB:
+RGB pins:
 
 ```text
 PCLK  = 42
 DE    = 40
 VSYNC = 41
 HSYNC = 39
+BL    = 2
 
 B: 15, 7, 6, 5, 4
 G: 9, 46, 3, 8, 16, 1
 R: 14, 21, 47, 48, 45
 ```
 
-Touch:
+Touch pins:
 
 ```text
-SCLK  = GPIO20
-MOSI  = GPIO19
-MISO  = -1
-TP_CS = GPIO18
-TP_IRQ= GPIO36
+SCLK   = GPIO20
+MOSI   = GPIO19
+MISO   = -1
+TP_CS  = GPIO18
+TP_IRQ = GPIO36
 ```
 
-SD/TF is not configured in this profile, matching the old `main` peripheral map.
+Touch uses the dedicated ESP-IDF SPI device path on `SPI3_HOST` at 1 MHz with hardware-controlled chip select, matching the old `main` transport architecture.
 
-The profile also preserves the compensated colour constants:
+The fixed colour constants remain:
 
 ```cpp
 RED   = 0xF800
@@ -210,30 +193,48 @@ GREEN = 0x001F
 BLUE  = 0x07E0
 ```
 
-### V21_MATRIX_TEST
+SD/TF is currently disabled in the fixed configuration.
 
-This profile tests the proposed V2.1 GPIO-matrix assignment:
+## Suspected V2.1 mapping — documentation only
+
+The following mapping was previously carried in the code as `V21_MATRIX_TEST`. It is now **documentation only**. There is no compile-time switch, runtime selector, or alternate initialization path for it.
+
+It remains useful because it may represent the actual V2.1 board routing, but it has not been accepted as the production mapping for this driver.
+
+Suspected RGB wiring:
 
 ```text
 PCLK  = 9
 DE    = 4
 VSYNC = 3
 HSYNC = 46
+BL    = 2
 
 B: 5, 6, 7, 15, 16
 G: 1, 48, 47, 21, 14, 38
 R: 45, 42, 41, 40, 39
 ```
 
-For this profile, colour constants switch back to standard RGB565:
+Suspected touch/TF wiring:
 
-```cpp
+```text
+GPIO12 = TP_CLK / shared SCLK
+GPIO11 = TP_DIN / shared MOSI
+GPIO13 = TP_OUT / shared MISO
+GPIO0  = TP_CS
+GPIO36 = TP_IRQ
+GPIO10 = TF/SD_CS
+```
+
+The suspected V2.1 colour interpretation is standard RGB565:
+
+```text
 RED   = 0xF800
 GREEN = 0x07E0
 BLUE  = 0x001F
 ```
 
-The test profile deliberately keeps the proven display timing:
+During the earlier experiment this mapping deliberately retained the proven 6 MHz display timing:
 
 ```text
 PCLK = 6 MHz
@@ -247,50 +248,9 @@ VFP = 8
 VPW = 2
 ```
 
-This isolates the experiment to **GPIO-matrix routing and colour-lane order**. The unverified 9 MHz / 8-8-4 timing proposal is not enabled.
+An earlier draft of the V2.1 reference placed LCD G0 on GPIO0, which conflicts with the suspected TP_CS connection on GPIO0. The later experimental code used LCD G0 on GPIO1 instead. That change is also unverified.
 
-To test the V2.1 map, change only:
-
-```cpp
-constexpr RGBProfile ACTIVE_RGB_PROFILE =
-    RGBProfile::V21_MATRIX_TEST;
-```
-
-Selecting `V21_MATRIX_TEST` also enables the complete V2.1 shared-peripheral startup path:
-
-```text
-GPIO0  = TP_CS
-GPIO10 = SD_CS
-GPIO12 = shared SCLK
-GPIO11 = shared MOSI
-GPIO13 = shared MISO
-GPIO36 = TP_IRQ
-```
-
-The TF card is automatically mounted during `NV3047::init()`. If a card is present and readable, `isSDMounted()` is true when initialization returns. If no card is inserted or mounting fails, LCD and touch initialization still succeeds; the application can insert a card later and call `getSDCard()->init()`.
-
-To revert immediately:
-
-```cpp
-constexpr RGBProfile ACTIVE_RGB_PROFILE =
-    RGBProfile::LEGACY_WORKING;
-```
-
-`examples/Color-test/color-test.ino` prints the selected profile and the active PCLK/DE/VSYNC/HSYNC pins at startup.
-
-### Expansion conflict under V21_MATRIX_TEST
-
-The proposed V2.1 RGB map uses:
-
-```text
-GPIO38 = LCD G5
-```
-
-but this physical board also exposes GPIO38 on the `GPIO_D` expansion connector.
-
-Therefore `Config::Expansion::GPIO_D0_AVAILABLE` becomes `false` while `V21_MATRIX_TEST` is selected. Do not drive an external device on GPIO38 during that RGB test.
-
-The V2.1 RGB map remains a **test hypothesis**, not a verified production mapping. A correct picture with standard RGB565 colours would be strong evidence for it; a blank, unstable, or mis-coloured image would not justify changing the known-working default.
+The suspected V2.1 RGB map consumes GPIO38 as LCD G5, which would conflict with the board's GPIO_D0 expansion pin. None of these V2.1 assignments are active in the current driver.
 
 ## RGB timing
 
@@ -375,9 +335,7 @@ Serial.println(canvas.getApproxFPS());
 
 ## Touch diagnostics
 
-Touch wiring and transport now follow the selected hardware profile.
-
-`LEGACY_WORKING` restores the old `main` dedicated ESP-IDF touch transport and pin map:
+The current driver has one fixed XPT2046 touch path:
 
 ```text
 GPIO20 = TP_CLK
@@ -387,38 +345,16 @@ GPIO18 = TP_CS
 GPIO36 = TP_IRQ
 ```
 
-`V21_MATRIX_TEST` keeps the Arduino `SPIClass` shared touch/TF transport and uses the photographed/published V2.1 touch map:
+The transport uses the ESP-IDF SPI device API on `SPI3_HOST` with hardware-controlled chip select. The XPT2046 command bytes remain `0x94` / `0xD4`.
 
-```text
-GPIO12 = TP_CLK
-GPIO11 = TP_DIN / MOSI
-GPIO13 = TP_OUT / MISO
-GPIO0  = TP_CS
-GPIO36 = TP_IRQ
-```
+The touch layer keeps the overhaul improvements:
 
-The active values are exposed through:
+- median filtering with the configured odd sample count,
+- raw touch diagnostic access,
+- calibration bounds from `Config::Touch`,
+- mapped coordinates clamped to X `0-479` and Y `0-271`.
 
-```cpp
-Config::PIN_SPI_SCLK
-Config::PIN_SPI_MOSI
-Config::PIN_SPI_MISO
-Config::PIN_TOUCH_CS
-Config::PIN_TOUCH_IRQ
-```
-
-Under `LEGACY_WORKING`, chip select is driven by the ESP-IDF SPI device exactly as in the old main architecture. Under `V21_MATRIX_TEST`, chip select is controlled around Arduino `SPIClass` transactions because touch shares the bus with TF.
-
-The higher-level touch processing is common to both profiles: the XPT2046 command bytes remain `0x94` / `0xD4`, the existing calibration range is retained, the odd sample count configured in `Config::Touch::SAMPLE_COUNT` (default 3) uses a median filter, and mapped output is clamped to X `0-479` and Y `0-271`.
-
-The public mapped coordinates remain:
-
-```text
-X: 0-479
-Y: 0-271
-```
-
-The existing XPT2046 command bytes and byte decoding are retained. Touch now performs its transactions through the same Arduino `SPIClass` instance used by the TF card, using `beginTransaction()` / `endTransaction()` so shared-bus access is serialized.
+The current touch-data issue being investigated does not change the documented fixed pin map above. The suspected GPIO12/11/13 + GPIO0 mapping is retained separately in the V2.1 reference section rather than as executable alternate configuration.
 
 See `examples/Touch-test/touch-test.ino`.
 
@@ -456,7 +392,7 @@ Config::Expansion::GPIO_D0 = 38;
 Config::Expansion::GPIO_D1 = 37;
 ```
 
-Availability depends on the selected profile. In `LEGACY_WORKING`, GPIO18 is used as TP_CS, so UART1 RX is not free. In `V21_MATRIX_TEST`, GPIO18 is free for UART1 RX.
+In the fixed active configuration, GPIO18 is used as TP_CS, so UART1 RX is not available to applications. GPIO17 remains available for UART1 TX.
 
 ## PCB-verified I2S pins
 
@@ -476,145 +412,21 @@ Config::I2S::BCLK  = 35;
 Config::I2S::SDIN  = 20;
 ```
 
-The NV3047 driver does not yet initialize the audio path. In `LEGACY_WORKING`, GPIO19 and GPIO20 are consumed by touch, so LRCLK and SDIN are not available for I2S. In `V21_MATRIX_TEST`, those pins are free for the documented I2S mapping.
+The NV3047 driver does not yet initialize the audio path. In the fixed active configuration, GPIO19 and GPIO20 are consumed by touch, so LRCLK and SDIN are not available for I2S. GPIO35 remains unclaimed by the touch path.
 
-## Shared XPT2046 + TF SPI bus
+## SD/TF status
 
-This shared-bus arrangement applies only to `V21_MATRIX_TEST`.
-
-Touch and the microSD/TF slot share:
-
-```text
-SCLK = GPIO12
-MOSI = GPIO11
-MISO = GPIO13
-```
-
-with independent chip selects:
-
-```text
-TP_CS = GPIO0
-SD_CS = GPIO10
-```
-
-In `LEGACY_WORKING`, touch instead uses GPIO20/GPIO19 with TP_CS on GPIO18 and SD/TF is disabled.
-
-The V2.1 SD configuration is:
+The current fixed hardware configuration does not enable the TF/microSD interface:
 
 ```cpp
-constexpr int PIN_SD_CS   = 10;
-constexpr int PIN_SD_CLK  = PIN_SHARED_SPI_SCLK;
-constexpr int PIN_SD_MOSI = PIN_SHARED_SPI_MOSI;
-constexpr int PIN_SD_MISO = PIN_SHARED_SPI_MISO;
-
-namespace Config {
-namespace SDCard {
-    constexpr bool ENABLED = RGB_V21_MATRIX_ACTIVE;
-    constexpr bool SHARES_TOUCH_SPI_BUS = RGB_V21_MATRIX_ACTIVE;
-    constexpr uint32_t CLOCK_HZ = 4000000;
-    constexpr bool END_SPI_ON_UNMOUNT = false;
-}
-}
+Config::SDCard::ENABLED = false;
+Config::PIN_SD_CS   = -1;
+Config::PIN_SD_CLK  = -1;
+Config::PIN_SD_MOSI = -1;
+Config::PIN_SD_MISO = -1;
 ```
 
-### Shared-bus implementation
-
-`SPI_Master` starts the Arduino `SPI` object on the active profile's touch pins. Under `V21_MATRIX_TEST`, both `TouchDriver` and `SDCardDriver` use that same GPIO12/11/13 bus. Under `LEGACY_WORKING`, the bus uses the original main-branch touch pins instead.
-
-This is deliberate. Arduino-ESP32 core 2.0.17's SD implementation performs its transfers using `SPIClass::beginTransaction()` and `endTransaction()`. The touch driver now does the same, so the two devices use one bus mutex rather than two independent SPI controllers fighting over the same physical wires.
-
-Both chip-select pins are held high when inactive.
-
-### Runtime SD insertion/removal
-
-The display and touch do not require an SD card to be installed.
-
-With `V21_MATRIX_TEST`, the driver automatically attempts the initial TF mount. The mount result is available through:
-
-```cpp
-display.isSDMounted();
-display.getSDCard();
-```
-
-A missing or unreadable card is deliberately non-fatal so an SD fault cannot prevent the display/touch system from starting.
-
-For a manual mount or remount:
-
-```cpp
-SDCardDriver* sd = display.getSDCard();
-
-if (sd && sd->init()) {
-    // SD mounted.
-}
-```
-
-Before physical removal, close application-owned files and issue:
-
-```cpp
-logFile.flush();
-logFile.close();
-
-if (sd && sd->prepareForRemoval()) {
-    // SAFE TO REMOVE SD CARD
-}
-```
-
-Then:
-
-```cpp
-sd->isMounted();       // false
-sd->isSafeToRemove();  // true
-```
-
-`SD.end()` unmounts the filesystem, but the shared SPI controller remains running because touch still needs it.
-
-After inserting a card again, call `sd->init()`.
-
-## Origin of the V2.1 RGB test profile
-
-A suggested V2.1 pin block was collected with this LCD mapping:
-
-```cpp
-#define LCD_PCLK      9
-#define LCD_DE        4
-#define LCD_VSYNC     3
-#define LCD_HSYNC     46
-
-#define LCD_R0 45
-#define LCD_R1 42
-#define LCD_R2 41
-#define LCD_R3 40
-#define LCD_R4 39
-
-#define LCD_G0 0
-#define LCD_G1 48
-#define LCD_G2 47
-#define LCD_G3 21
-#define LCD_G4 14
-#define LCD_G5 38
-
-#define LCD_B0 5
-#define LCD_B1 6
-#define LCD_B2 7
-#define LCD_B3 15
-#define LCD_B4 16
-```
-
-This mapping is now retained as the opt-in `V21_MATRIX_TEST` profile. It is still **unverified** and is not the default.
-
-The earlier version of this reference assigned `LCD_G0 = GPIO0`, which conflicted with the PCB-verified `TP_CS = GPIO0`. The revised test profile therefore uses `LCD_G0 = GPIO1`, matching the newer V2.1 proposal.
-
-The known-working `LEGACY_WORKING` profile continues to use:
-
-```text
-DE    = 40
-VSYNC = 41
-HSYNC = 39
-PCLK  = 42
-BL    = 2
-```
-
-The working RGB data assignments in this project deliberately use a non-standard software bank/bit order because that is how the physical panel was made to produce the correct colours during hardware testing. Do not replace them from the Google reference merely to make the labels look textbook-correct.
+The existing `SDCardDriver` API remains in the library, but `isConfigured()` is false under the current fixed configuration. The suspected V2.1 TF wiring is retained only in the documentation-only V2.1 section above.
 
 ## Optional NV3047_memorymanager takeover
 
