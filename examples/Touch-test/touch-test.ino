@@ -6,8 +6,7 @@ NV3047 panel;
 void setup() {
     Serial.begin(115200);
 
-    Serial.print("Hardware profile: ");
-    Serial.println(Config::RGB_PROFILE_NAME);
+    Serial.println("Hardware map: fixed Legacy Working baseline");
 
     Serial.print("Touch SCLK/MOSI/MISO/CS/IRQ: ");
     Serial.print(Config::PIN_SPI_SCLK);
