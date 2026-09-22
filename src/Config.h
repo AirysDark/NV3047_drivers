@@ -31,6 +31,11 @@ namespace Config {
     constexpr bool RGB_V21_MATRIX_ACTIVE =
         ACTIVE_RGB_PROFILE == RGBProfile::V21_MATRIX_TEST;
 
+    constexpr const char* RGB_PROFILE_NAME =
+        RGB_V21_MATRIX_ACTIVE
+            ? "V21_MATRIX_TEST"
+            : "LEGACY_WORKING";
+
     // ============================================================
     // RGB PANEL PINS
     // ============================================================
