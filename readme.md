@@ -2,7 +2,7 @@
 
 A low-level display, touch, framebuffer, and hardware abstraction driver for the **Elecrow CrowPanel 4.3" DIS06043H** on the **ESP32-S3**.
 
-This branch is intentionally built around **Arduino-ESP32 core 2.0.17**. The working electrical setup is treated as authoritative: the 6 MHz RGB pixel clock, the current RGB GPIO routing, the non-standard colour-bank mapping, and the verified XPT2046 command/byte handling are preserved.
+This branch is intentionally built around **Arduino-ESP32 core 2.0.17**. The 6 MHz RGB configuration and non-standard colour-bank mapping remain the known-working display setup. Touch, expansion, and I2S pin assignments are now based directly on the silkscreen photographed on the actual PCB.
 
 ## What changed in v2
 
@@ -20,6 +20,9 @@ This branch is intentionally built around **Arduino-ESP32 core 2.0.17**. The wor
 - Reused the DisplayDriver DMA fill buffer instead of allocating/freeing it on every fill.
 - Reduced the touch SPI queue to the single slot required by polling transfers.
 - Updated stale examples and package metadata.
+- Corrected the active touch SPI pins from the actual PCB silkscreen.
+- Documented PCB-verified UART1, GPIO_D and I2S pins.
+- Added an SD/TF HAL scaffold with runtime safe-removal support; TF mounting remains disabled until its chip-select is confirmed.
 
 ## Single-source configuration
 
@@ -237,6 +240,27 @@ Serial.println(canvas.getApproxFPS());
 
 ## Touch diagnostics
 
+The actual PCB silkscreen identifies the resistive-touch interface as:
+
+```text
+GPIO10 = TP_CS
+GPIO12 = TP_CLK
+GPIO11 = TP_DIN
+GPIO13 = TP_OUT
+GPIO36 = TP_IRQ
+```
+
+These are now the **active touch pins** in `Config.h`:
+
+```cpp
+constexpr int PIN_SHARED_SPI_SCLK = 12;
+constexpr int PIN_SHARED_SPI_MOSI = 11;
+constexpr int PIN_SHARED_SPI_MISO = 13;
+
+constexpr int PIN_TOUCH_CS  = 10;
+constexpr int PIN_TOUCH_IRQ = 36;
+```
+
 The normal touch path uses the odd sample count configured in `Config::Touch::SAMPLE_COUNT` (default 3) and chooses the median sample to reject ADC spikes. Supported configured values are odd counts from 3 through 9.
 
 The public mapped coordinates are clamped to:
@@ -246,74 +270,71 @@ X: 0-479
 Y: 0-271
 ```
 
-For calibration work, `TouchDriver::getRawTouch()` exposes the verified raw XPT2046 values without changing the working command-byte layout. SPI transaction failures are propagated as failed reads instead of being converted into fake edge coordinates.
+The existing XPT2046 command bytes and verified byte-alignment handling are retained. For calibration work, `TouchDriver::getRawTouch()` exposes raw values and SPI transaction failures are propagated as failed reads.
 
 See `examples/Touch-test/touch-test.ino`.
 
-## External expansion ports (future reference)
+## PCB-verified external expansion ports
 
-The CrowPanel exposes two external **HY2.0-4P** expansion connectors. These are documented here for future peripherals and are **not currently initialized or claimed by the NV3047 driver**.
+The following labels are taken directly from the photographed PCB silkscreen.
 
-### UART1 port
-
-```text
-Pin 1 : GND
-Pin 2 : 3V3
-Pin 3 : GPIO18  (RX)
-Pin 4 : GPIO17  (TX)
-```
-
-Suggested future use:
-
-```cpp
-constexpr int UART1_RX = 18;
-constexpr int UART1_TX = 17;
-```
-
-### GPIO_D port
+### UART1 connector
 
 ```text
-Pin 1 : GND
-Pin 2 : 3V3
-Pin 3 : GPIO19
-Pin 4 : GPIO20
+GPIO18 = RX1
+GPIO17 = TX1
+3V3
+GND
 ```
 
-Suggested future use:
+The corresponding configuration values are:
 
 ```cpp
-constexpr int EXPANSION_GPIO_D1 = 19;
-constexpr int EXPANSION_GPIO_D2 = 20;
+Config::Expansion::UART1_RX = 18;
+Config::Expansion::UART1_TX = 17;
 ```
 
-### Important pin-conflict note
+### GPIO_D connector
 
-The current working driver configuration already uses some of these GPIO numbers internally:
+```text
+GPIO38
+GPIO37
+3V3
+GND
+```
 
-- GPIO18 is currently the working touch chip-select pin.
-- GPIO19 and GPIO20 are currently used by the working touch SPI bus.
-
-Because of that, these expansion pins should be treated as **board-reference information only** until the hardware revision and internal routing are verified. Do not enable external devices on these pins at the same time as the current touch configuration without first resolving the GPIO conflict.
-
-## Alternative / reference DIS06043H pin map
-
-The following pinout has been collected as an **alternative/reference DIS06043H mapping**. It is retained for hardware comparison and future board-revision investigation.
-
-**Important:** this is **not** the active pin map used by `driver_overhaul_v2`. The current working RGB/touch configuration in `Config.h` remains authoritative and should not be replaced with this reference map without testing the actual panel.
-
-### Reference microSD / TF slot
+The corresponding configuration values are:
 
 ```cpp
-#define SD_CS   10
-#define SD_CLK  12
-#define SD_MOSI 11
-#define SD_MISO 13
-#define SD_IRQ  36
+Config::Expansion::GPIO_D0 = 38;
+Config::Expansion::GPIO_D1 = 37;
 ```
 
-The SPI SD pins `CS=10`, `CLK=12`, `MOSI=11`, and `MISO=13` are the values currently used by `SDCardDriver`. The reported `SD_IRQ=36` value is **not used**, because GPIO36 is retained by the working driver as the touch interrupt input.
+With the corrected PCB touch pinout, these expansion GPIOs no longer conflict with the active touch controller.
 
-### Reference LCD mapping
+## PCB-verified I2S pins
+
+The photographed board silkscreen also identifies:
+
+```text
+GPIO19 = I2S_LRCLK
+GPIO35 = I2S_BCLK
+GPIO20 = I2S_SDIN
+```
+
+These are recorded in `Config.h` as:
+
+```cpp
+Config::I2S::LRCLK = 19;
+Config::I2S::BCLK  = 35;
+Config::I2S::SDIN  = 20;
+```
+
+The NV3047 display driver does not currently initialize I2S; these definitions are retained for future audio support.
+
+## Alternative / reference DIS06043H LCD pin map
+
+A second DIS06043H pin map was collected earlier. Its **LCD/RGB portion** is retained as an alternative reference because it has a strong structural overlap with the working RGB map, but it has not been verified on this physical board.
 
 ```cpp
 #define LCD_PCLK      9
@@ -342,157 +363,78 @@ The SPI SD pins `CS=10`, `CLK=12`, `MOSI=11`, and `MISO=13` are the values curre
 #define LCD_B4 16
 ```
 
-### Reference resistive-touch mapping
-
-```cpp
-#define TOUCH_CLK  1
-#define TOUCH_DIN  11
-#define TOUCH_DOUT 13
-#define TOUCH_CS   38
-```
-
-### Why this reference is interesting
-
-There is a strong structural overlap between this reference map and the current working map.
+The overlap remains interesting:
 
 ```text
-REFERENCE BLUE:   5, 6, 7, 15, 16
-WORKING BLUE:    15, 7, 6, 5, 4
-```
+REFERENCE BLUE:  5, 6, 7, 15, 16
+WORKING BLUE:   15, 7, 6, 5, 4
 
-Four of the five blue GPIOs are shared.
-
-The reference red bank is:
-
-```text
-45, 42, 41, 40, 39
-```
-
-Those correspond in the working map to:
-
-```text
+REFERENCE RED:  45, 42, 41, 40, 39
+WORKING:
 45 = R4
 42 = PCLK
 41 = VSYNC
 40 = DE
 39 = HSYNC
-```
 
-The reference green bank also reuses much of the working red bank:
-
-```text
 REFERENCE GREEN: 0, 48, 47, 21, 14, 38
 WORKING RED:     14, 21, 47, 48, 45
 ```
 
-And the reference timing pins:
+The earlier alternative **touch** values are no longer considered valid for this PCB because the board itself explicitly labels TP as GPIO10/12/11/13/36. Likewise, the earlier claim that GPIO10 was the TF/SD chip-select is rejected: GPIO10 is physically labelled `TP_CS`.
+
+Do **not** replace the working RGB map with this alternative LCD map without testing the actual panel.
+
+## MicroSD / TF status
+
+The TF slot is believed to share the same SPI clock/data lines as the touch controller:
 
 ```text
-PCLK  = 9
-HSYNC = 46
-VSYNC = 3
-DE    = 4
+Shared CLK  = GPIO12
+Shared MOSI = GPIO11
+Shared MISO = GPIO13
 ```
 
-are GPIOs that currently sit inside the working green/blue data banks.
-
-This overlap is documented because it may indicate a different PCB revision, a differently-labelled vendor pin map, or a systematic signal-group remapping. It may also help explain why this project requires its unusual panel colour-bank compensation.
-
-Until the alternative mapping is verified on the actual hardware, **do not replace the working RGB/touch map in `Config.h` with it**.
-
-## MicroSD support
-
-The DIS06043H microSD slot is supported through the dedicated `SDCardDriver` HAL using the Arduino-ESP32 **2.0.17** SPI SD library.
-
-The confirmed SPI wiring is configured only in `Config.h`:
+The **TF chip-select is still unknown**. It is therefore deliberately represented as:
 
 ```cpp
-constexpr int PIN_SD_CS   = 10;
-constexpr int PIN_SD_CLK  = 12;
-constexpr int PIN_SD_MOSI = 11;
-constexpr int PIN_SD_MISO = 13;
+constexpr int PIN_SD_CS = -1;
 
+namespace Config {
 namespace SDCard {
-    constexpr uint32_t CLOCK_HZ = 4000000;
-    constexpr const char* MOUNT_POINT = "/sd";
-    constexpr uint8_t MAX_OPEN_FILES = 5;
-    constexpr bool FORMAT_IF_MOUNT_FAILED = false;
-    constexpr bool END_SPI_ON_UNMOUNT = true;
+    constexpr bool ENABLED = false;
+    constexpr bool SHARES_TOUCH_SPI_BUS = true;
+}
 }
 ```
 
-The SD slot uses Arduino's global `SPI` object, which maps to FSPI on ESP32-S3 under core 2.0.17. The existing XPT2046 driver remains on its separate `SPI3_HOST` bus, so adding SD support does not replace the working touch wiring.
+This is intentional. `SDCardDriver::init()` currently refuses to mount while the TF CS is unknown, so it cannot accidentally use GPIO10 and interfere with touch.
 
-The reported `SD_IRQ = 36` value is not used by this driver. GPIO36 remains assigned to the currently working touch IRQ path.
+The existing `SDCardDriver` file API and runtime eject API remain in place as a scaffold for when the TF chip-select is identified. Because the final TF implementation must share the already-active SPI bus with touch, it must be added as another device on that bus rather than shutting down or replacing the touch SPI controller.
 
-Basic use:
+### Future runtime safe-removal command
 
-```cpp
-#include <SDCardDriver.h>
-
-SDCardDriver sd;
-
-void setup() {
-    Serial.begin(115200);
-
-    if (!sd.init()) {
-        Serial.println("SD mount failed");
-        return;
-    }
-
-    Serial.println(sd.cardSizeBytes());
-
-    fs::File file = sd.open("/test.txt", FILE_WRITE);
-    if (file) {
-        file.println("NV3047 SD test");
-        file.close();
-    }
-}
-```
-
-The SD card is **not automatically mounted by `NV3047::init()`**. This is intentional so the display/touch driver can still start normally with no card inserted. Mount it explicitly with `SDCardDriver::init()` when the application needs storage.
-
-### Runtime safe-removal command
-
-For a future UI/menu command such as **Eject SD Card** or **Prepare SD for removal**, call:
+Once TF mounting is completed, application code can prepare a mounted card for physical removal with:
 
 ```cpp
-if (sd.prepareForRemoval()) {
-    // UI can now show: SAFE TO REMOVE SD CARD
-}
-```
-
-The driver then reports:
-
-```cpp
-sd.isMounted();       // false
-sd.isSafeToRemove();  // true
-```
-
-Before calling `prepareForRemoval()`, close every application-owned `fs::File`:
-
-```cpp
-fs::File logFile = sd.open("/log.txt", FILE_APPEND);
-
-// ...write data...
-
 logFile.flush();
 logFile.close();
 
-sd.prepareForRemoval();
+if (sd.prepareForRemoval()) {
+    // SAFE TO REMOVE SD CARD
+}
 ```
 
-`prepareForRemoval()` unmounts the SD filesystem and, with the default configuration, shuts down the SD SPI bus. The display, touch, framebuffer and backlight continue running normally.
-
-After physically inserting a card again, call:
+The state can be queried with:
 
 ```cpp
-sd.init();
+sd.isMounted();
+sd.isSafeToRemove();
 ```
 
-to remount it during runtime.
+Because touch and TF share the bus, ejecting the TF card must **not** shut down the shared SPI bus. `Config::SDCard::END_SPI_ON_UNMOUNT` therefore defaults to `false`.
 
-**Important:** the driver cannot forcibly close `fs::File` objects that the application has copied into another scope. Those file handles must be flushed/closed before the eject command for removal to be genuinely safe.
+After a card is inserted again, the future completed backend will remount it through `sd.init()`.
 
 ## Notes for future optimization
 
