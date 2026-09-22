@@ -7,14 +7,13 @@
 
 class SPI_Master {
 public:
-    // Initializes the selected profile's touch transport.
-    // LEGACY_WORKING: dedicated ESP-IDF SPI device, matching old main.
-    // V21_MATRIX_TEST: Arduino SPIClass shared by touch + TF.
+    // Initializes the fixed dedicated XPT2046 touch SPI transport.
     static bool init();
 
-    // V2.1 shared Arduino SPI bus.
-    static SPIClass& bus();
+    // Dedicated touch device handle used by TouchDriver.
+    static spi_device_handle_t touchDevice();
 
-    // LEGACY_WORKING dedicated XPT2046 device handle.
-    static spi_device_handle_t legacyTouchDevice();
+    // Retained for the SDCardDriver API. The current fixed hardware
+    // configuration leaves SD disabled.
+    static SPIClass& bus();
 };
