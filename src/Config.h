@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #include <driver/gpio.h>
+#include <driver/spi_master.h>
 #include <esp_heap_caps.h>
 
 namespace Config {
@@ -254,7 +255,15 @@ namespace Config {
     namespace SPI {
         constexpr int TOUCH_CLOCK_HZ = 1000000;
 
+        // LEGACY_WORKING reproduces the original main-branch ESP-IDF
+        // dedicated touch transport. V2.1 uses Arduino SPIClass instead.
+        constexpr spi_host_device_t LEGACY_TOUCH_HOST = SPI3_HOST;
+        constexpr int LEGACY_MAX_TRANSFER_BYTES = 32;
+        constexpr int LEGACY_QUEUE_SIZE = 7;
+
         static_assert(TOUCH_CLOCK_HZ > 0, "Touch SPI clock must be greater than zero");
+        static_assert(LEGACY_MAX_TRANSFER_BYTES >= 3, "Legacy touch SPI transfer size is too small");
+        static_assert(LEGACY_QUEUE_SIZE > 0, "Legacy touch SPI queue size must be positive");
     }
 
 
