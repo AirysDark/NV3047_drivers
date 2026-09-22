@@ -5,7 +5,12 @@ bool NV3047::init() {
     // LEGACY_WORKING preserves main's GPIO20/19 + GPIO18 CS map.
     // V21_MATRIX_TEST uses GPIO12/11/13 + GPIO0 CS and also de-asserts SD CS.
     if (!spiMaster.init()) return false;
-    if (!touch.init(spiMaster.bus())) return false;
+
+    if (Config::RGB_V21_MATRIX_ACTIVE) {
+        if (!touch.init(spiMaster.bus())) return false;
+    } else {
+        if (!touch.init(spiMaster.legacyTouchDevice())) return false;
+    }
 
     if (!rgbBus.init()) return false;
     if (!display.init(rgbBus.getHandle())) return false;
