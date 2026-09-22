@@ -22,7 +22,7 @@ This branch is intentionally built around **Arduino-ESP32 core 2.0.17**. The 6 M
 - Updated stale examples and package metadata.
 - Corrected the active touch SPI pins from the actual PCB silkscreen.
 - Documented PCB-verified UART1, GPIO_D and I2S pins.
-- Added an SD/TF HAL scaffold with runtime safe-removal support; TF mounting remains disabled until its chip-select is confirmed.
+- Added shared-bus SD/TF support with independent TF chip-select, runtime safe-removal, and one SPI mutex shared with XPT2046 touch.
 
 ## Single-source configuration
 
@@ -240,43 +240,43 @@ Serial.println(canvas.getApproxFPS());
 
 ## Touch diagnostics
 
-The actual PCB silkscreen identifies the resistive-touch interface as:
+For hardware revision **V2.1**, the photographed PCB silkscreen and Elecrow's published V2.1 definition agree on the XPT2046 interface:
 
 ```text
-GPIO10 = TP_CS
+GPIO0  = TP_CS
 GPIO12 = TP_CLK
-GPIO11 = TP_DIN
-GPIO13 = TP_OUT
+GPIO11 = TP_DIN / MOSI
+GPIO13 = TP_OUT / MISO
 GPIO36 = TP_IRQ
 ```
 
-These are now the **active touch pins** in `Config.h`:
+The active configuration is therefore:
 
 ```cpp
 constexpr int PIN_SHARED_SPI_SCLK = 12;
 constexpr int PIN_SHARED_SPI_MOSI = 11;
 constexpr int PIN_SHARED_SPI_MISO = 13;
 
-constexpr int PIN_TOUCH_CS  = 10;
+constexpr int PIN_TOUCH_CS  = 0;
 constexpr int PIN_TOUCH_IRQ = 36;
 ```
 
-The normal touch path uses the odd sample count configured in `Config::Touch::SAMPLE_COUNT` (default 3) and chooses the median sample to reject ADC spikes. Supported configured values are odd counts from 3 through 9.
+GPIO0 is an ESP32-S3 boot-strapping pin, so the driver keeps TP_CS inactive/high whenever touch is not being addressed. The board hardware is designed around this connection.
 
-The public mapped coordinates are clamped to:
+The normal touch path uses the odd sample count configured in `Config::Touch::SAMPLE_COUNT` (default 3) and chooses the median sample to reject ADC spikes.
+
+The public mapped coordinates remain:
 
 ```text
 X: 0-479
 Y: 0-271
 ```
 
-The existing XPT2046 command bytes and verified byte-alignment handling are retained. For calibration work, `TouchDriver::getRawTouch()` exposes raw values and SPI transaction failures are propagated as failed reads.
+The existing XPT2046 command bytes and byte decoding are retained. Touch now performs its transactions through the same Arduino `SPIClass` instance used by the TF card, using `beginTransaction()` / `endTransaction()` so shared-bus access is serialized.
 
 See `examples/Touch-test/touch-test.ino`.
 
 ## PCB-verified external expansion ports
-
-The following labels are taken directly from the photographed PCB silkscreen.
 
 ### UART1 connector
 
@@ -287,7 +287,7 @@ GPIO17 = TX1
 GND
 ```
 
-The corresponding configuration values are:
+Configured as:
 
 ```cpp
 Config::Expansion::UART1_RX = 18;
@@ -303,18 +303,18 @@ GPIO37
 GND
 ```
 
-The corresponding configuration values are:
+Configured as:
 
 ```cpp
 Config::Expansion::GPIO_D0 = 38;
 Config::Expansion::GPIO_D1 = 37;
 ```
 
-With the corrected PCB touch pinout, these expansion GPIOs no longer conflict with the active touch controller.
+These pins no longer conflict with the corrected active touch mapping.
 
 ## PCB-verified I2S pins
 
-The photographed board silkscreen also identifies:
+The board silkscreen identifies:
 
 ```text
 GPIO19 = I2S_LRCLK
@@ -322,7 +322,7 @@ GPIO35 = I2S_BCLK
 GPIO20 = I2S_SDIN
 ```
 
-These are recorded in `Config.h` as:
+Recorded in `Config.h` as:
 
 ```cpp
 Config::I2S::LRCLK = 19;
@@ -330,18 +330,96 @@ Config::I2S::BCLK  = 35;
 Config::I2S::SDIN  = 20;
 ```
 
-The NV3047 display driver does not currently initialize I2S; these definitions are retained for future audio support.
+The NV3047 driver does not yet initialize the audio path; these are reserved for future speaker/I2S support.
 
-## Alternative / reference DIS06043H LCD pin map
+## Shared XPT2046 + TF SPI bus
 
-A second DIS06043H pin map was collected earlier. Its **LCD/RGB portion** is retained as an alternative reference because it has a strong structural overlap with the working RGB map, but it has not been verified on this physical board.
+Touch and the microSD/TF slot share:
+
+```text
+SCLK = GPIO12
+MOSI = GPIO11
+MISO = GPIO13
+```
+
+but have independent chip selects:
+
+```text
+TP_CS = GPIO0
+SD_CS = GPIO10
+```
+
+The active SD configuration is:
+
+```cpp
+constexpr int PIN_SD_CS   = 10;
+constexpr int PIN_SD_CLK  = PIN_SHARED_SPI_SCLK;
+constexpr int PIN_SD_MOSI = PIN_SHARED_SPI_MOSI;
+constexpr int PIN_SD_MISO = PIN_SHARED_SPI_MISO;
+
+namespace Config {
+namespace SDCard {
+    constexpr bool ENABLED = true;
+    constexpr bool SHARES_TOUCH_SPI_BUS = true;
+    constexpr uint32_t CLOCK_HZ = 4000000;
+    constexpr bool END_SPI_ON_UNMOUNT = false;
+}
+}
+```
+
+### Shared-bus implementation
+
+`SPI_Master` starts one Arduino `SPI` object on GPIO12/11/13. Both `TouchDriver` and `SDCardDriver` use that exact same object.
+
+This is deliberate. Arduino-ESP32 core 2.0.17's SD implementation performs its transfers using `SPIClass::beginTransaction()` and `endTransaction()`. The touch driver now does the same, so the two devices use one bus mutex rather than two independent SPI controllers fighting over the same physical wires.
+
+Both chip-select pins are held high when inactive.
+
+### Runtime SD insertion/removal
+
+The display and touch do not require an SD card to be installed.
+
+Mount or remount a card with:
+
+```cpp
+SDCardDriver sd;
+
+if (sd.init()) {
+    // SD mounted.
+}
+```
+
+Before physical removal, close application-owned files and issue:
+
+```cpp
+logFile.flush();
+logFile.close();
+
+if (sd.prepareForRemoval()) {
+    // SAFE TO REMOVE SD CARD
+}
+```
+
+Then:
+
+```cpp
+sd.isMounted();       // false
+sd.isSafeToRemove();  // true
+```
+
+`SD.end()` unmounts the filesystem, but the shared SPI controller remains running because touch still needs it.
+
+After inserting a card again, call `sd.init()`.
+
+## Google / alternative V2.1 RGB reference
+
+A suggested V2.1 pin block was collected with this LCD mapping:
 
 ```cpp
 #define LCD_PCLK      9
 #define LCD_DE        4
 #define LCD_VSYNC     3
 #define LCD_HSYNC     46
-#define LCD_BACKLIGHT 2
 
 #define LCD_R0 45
 #define LCD_R1 42
@@ -363,78 +441,21 @@ A second DIS06043H pin map was collected earlier. Its **LCD/RGB portion** is ret
 #define LCD_B4 16
 ```
 
-The overlap remains interesting:
+This is retained **only as a rejected/alternative reference**, not as the active LCD configuration.
+
+The main reason is that it assigns `LCD_G0 = GPIO0`, while the V2.1 PCB and Elecrow definition use **GPIO0 as TP_CS**. A continuously driven RGB data line cannot also operate as the XPT2046 chip-select in the normal direct-wired arrangement.
+
+The known-working driver continues to use its existing LCD GPIO set and timing:
 
 ```text
-REFERENCE BLUE:  5, 6, 7, 15, 16
-WORKING BLUE:   15, 7, 6, 5, 4
-
-REFERENCE RED:  45, 42, 41, 40, 39
-WORKING:
-45 = R4
-42 = PCLK
-41 = VSYNC
-40 = DE
-39 = HSYNC
-
-REFERENCE GREEN: 0, 48, 47, 21, 14, 38
-WORKING RED:     14, 21, 47, 48, 45
+DE    = 40
+VSYNC = 41
+HSYNC = 39
+PCLK  = 42
+BL    = 2
 ```
 
-The earlier alternative **touch** values are no longer considered valid for this PCB because the board itself explicitly labels TP as GPIO10/12/11/13/36. Likewise, the earlier claim that GPIO10 was the TF/SD chip-select is rejected: GPIO10 is physically labelled `TP_CS`. The alternative LCD map also places GPIO38 inside the green RGB bank, while this PCB labels GPIO38 on the external `GPIO_D` connector; that is another strong sign the alternative LCD map belongs to a different board revision or routing.
-
-Do **not** replace the working RGB map with this alternative LCD map without testing the actual panel.
-
-## MicroSD / TF status
-
-The TF slot is believed to share the same SPI clock/data lines as the touch controller:
-
-```text
-Shared CLK  = GPIO12
-Shared MOSI = GPIO11
-Shared MISO = GPIO13
-```
-
-The **TF chip-select is still unknown**. It is therefore deliberately represented as:
-
-```cpp
-constexpr int PIN_SD_CS = -1;
-
-namespace Config {
-namespace SDCard {
-    constexpr bool ENABLED = false;
-    constexpr bool SHARES_TOUCH_SPI_BUS = true;
-}
-}
-```
-
-This is intentional. `SDCardDriver::init()` currently refuses to mount while the TF CS is unknown, so it cannot accidentally use GPIO10 and interfere with touch.
-
-The existing `SDCardDriver` file API and runtime eject API remain in place as a scaffold for when the TF chip-select is identified. Because the final TF implementation must share the already-active SPI bus with touch, it must be added as another device on that bus rather than shutting down or replacing the touch SPI controller.
-
-### Future runtime safe-removal command
-
-Once TF mounting is completed, application code can prepare a mounted card for physical removal with:
-
-```cpp
-logFile.flush();
-logFile.close();
-
-if (sd.prepareForRemoval()) {
-    // SAFE TO REMOVE SD CARD
-}
-```
-
-The state can be queried with:
-
-```cpp
-sd.isMounted();
-sd.isSafeToRemove();
-```
-
-Because touch and TF share the bus, ejecting the TF card must **not** shut down the shared SPI bus. `Config::SDCard::END_SPI_ON_UNMOUNT` therefore defaults to `false`.
-
-After a card is inserted again, the future completed backend will remount it through `sd.init()`.
+The working RGB data assignments in this project deliberately use a non-standard software bank/bit order because that is how the physical panel was made to produce the correct colours during hardware testing. Do not replace them from the Google reference merely to make the labels look textbook-correct.
 
 ## Notes for future optimization
 
