@@ -1,10 +1,5 @@
 #include "Config.h"
 
-namespace Config {
-    // Global configuration state or externally linked constants can be initialized here.
-    // Currently, all hardware configs are evaluated at compile time via constexpr in the header.
-    
-    namespace Framebuffer {
-        // Keeps configuration symbols organized for the double buffering system.
-    }
-}
+// All NV3047 hardware, memory, touch, display and timing configuration is
+// compile-time data declared in Config.h. This translation unit is intentionally
+// kept minimal so application tuning never requires editing implementation files.
