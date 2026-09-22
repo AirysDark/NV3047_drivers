@@ -381,7 +381,7 @@ REFERENCE GREEN: 0, 48, 47, 21, 14, 38
 WORKING RED:     14, 21, 47, 48, 45
 ```
 
-The earlier alternative **touch** values are no longer considered valid for this PCB because the board itself explicitly labels TP as GPIO10/12/11/13/36. Likewise, the earlier claim that GPIO10 was the TF/SD chip-select is rejected: GPIO10 is physically labelled `TP_CS`.
+The earlier alternative **touch** values are no longer considered valid for this PCB because the board itself explicitly labels TP as GPIO10/12/11/13/36. Likewise, the earlier claim that GPIO10 was the TF/SD chip-select is rejected: GPIO10 is physically labelled `TP_CS`. The alternative LCD map also places GPIO38 inside the green RGB bank, while this PCB labels GPIO38 on the external `GPIO_D` connector; that is another strong sign the alternative LCD map belongs to a different board revision or routing.
 
 Do **not** replace the working RGB map with this alternative LCD map without testing the actual panel.
 
