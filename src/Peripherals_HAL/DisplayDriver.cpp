@@ -14,7 +14,8 @@ bool DisplayDriver::init(esp_lcd_panel_handle_t rgb_handle) {
     if (!rgb_handle) return false;
 
     handle = rgb_handle;
-    current_brightness = 204; // 80% of 255
+    current_brightness = static_cast<uint8_t>(
+        (static_cast<uint16_t>(Config::Display::DEFAULT_BRIGHTNESS_PERCENT) * 255U) / 100U);
     is_sleeping = false;
 
     if (esp_lcd_panel_reset(handle) != ESP_OK) {
@@ -31,7 +32,7 @@ bool DisplayDriver::init(esp_lcd_panel_handle_t rgb_handle) {
     ledc_timer.speed_mode = LEDC_LOW_SPEED_MODE;
     ledc_timer.timer_num = LEDC_TIMER_0;
     ledc_timer.duty_resolution = LEDC_TIMER_8_BIT;
-    ledc_timer.freq_hz = 5000;
+    ledc_timer.freq_hz = Config::Display::BACKLIGHT_PWM_HZ;
 
     if (ledc_timer_config(&ledc_timer) != ESP_OK) {
         handle = nullptr;
@@ -65,7 +66,9 @@ void DisplayDriver::setBacklight(uint8_t brightness) {
 void DisplayDriver::setBrightness(uint8_t percentage) {
     if (percentage > 100) percentage = 100;
 
-    const uint16_t duty = (static_cast<uint16_t>(percentage) * 255U) / 100U;
+    const uint16_t duty =
+        (static_cast<uint16_t>(percentage) * 255U) / 100U;
+
     setBacklight(static_cast<uint8_t>(duty));
 }
 
@@ -105,11 +108,14 @@ void DisplayDriver::fillScreen(uint16_t color) {
     if (!handle) return;
 
     const size_t pixel_count =
-        static_cast<size_t>(Config::SCREEN_WIDTH) * FILL_BUFFER_LINES;
+        static_cast<size_t>(Config::SCREEN_WIDTH) *
+        Config::Display::FILL_BUFFER_LINES;
 
     if (!fill_buffer) {
         fill_buffer = static_cast<uint16_t*>(
-            heap_caps_malloc(pixel_count * sizeof(uint16_t), MALLOC_CAP_DMA));
+            heap_caps_malloc(
+                pixel_count * sizeof(uint16_t),
+                MALLOC_CAP_DMA));
 
         if (!fill_buffer) return;
     }
@@ -118,11 +124,15 @@ void DisplayDriver::fillScreen(uint16_t color) {
         fill_buffer[i] = color;
     }
 
-    for (int y = 0; y < Config::SCREEN_HEIGHT; y += FILL_BUFFER_LINES) {
+    for (int y = 0;
+         y < Config::SCREEN_HEIGHT;
+         y += static_cast<int>(Config::Display::FILL_BUFFER_LINES)) {
+
+        const int remaining = Config::SCREEN_HEIGHT - y;
         const int h =
-            (y + FILL_BUFFER_LINES > Config::SCREEN_HEIGHT)
-                ? (Config::SCREEN_HEIGHT - y)
-                : FILL_BUFFER_LINES;
+            remaining < static_cast<int>(Config::Display::FILL_BUFFER_LINES)
+                ? remaining
+                : static_cast<int>(Config::Display::FILL_BUFFER_LINES);
 
         drawBitmap(0, y, Config::SCREEN_WIDTH, h, fill_buffer);
     }
