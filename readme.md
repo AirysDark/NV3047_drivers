@@ -1,126 +1,228 @@
-# NV3047 Display & HAL Driver Engine (v1.0.0)
+# NV3047 Display & HAL Driver Engine (v2.0.0 overhaul)
 
-A high-performance, low-level Hardware Abstraction Layer (HAL) display driver custom-built for the **Elecrow CrowPanel 4.3" HMI Display (DIS06043H)** running on the **ESP32-S3** under Arduino Core 2.0.17. 
+A low-level display, touch, framebuffer, and hardware abstraction driver for the **Elecrow CrowPanel 4.3" DIS06043H** on the **ESP32-S3**.
 
-This library completely detaches low-level hardware registers, timings, and bit-blitting math from your application layer, providing a rock-solid, super-smooth foundation for high-level UI builders.
+This branch is intentionally built around **Arduino-ESP32 core 2.0.17**. The working electrical setup is treated as authoritative: the 6 MHz RGB pixel clock, the current RGB GPIO routing, the non-standard colour-bank mapping, and the verified XPT2046 command/byte handling are preserved.
 
----
+## What changed in v2
 
-## 🚀 Key Hardware Features
-* **Linker-Safe Harmonic Cadence Lock:** Bypasses broken core VSYNC callback bugs using internal high-resolution microsecond tracking to synchronize buffer swaps perfectly behind the physical 60Hz panel refresh cycle. Eliminates screen tearing and "lightning-bolt" fractures.
-* **Stabilised 6MHz Pixel Clock:** Tuned specifically to eliminate high-frequency PCB cross-talk and VCR-style line tracking distortion on unshielded parallel copper traces.
-* **High-Speed 32-Bit Clearing:** Combines dual 16-bit RGB565 pixels into dense 32-bit words to cut memory bus clear cycles cleanly in half.
-* **Boundary-Clipped Blitting Primitives:** High-efficiency geometric blitters equipped with hard boundary clipping checking loops to protect system memory allocations.
-* **Calibrated Touch Matrix:** Remaps raw XPT2046 SPI sensor voltages into guaranteed `0-479` X and `0-271` Y coordinates, with automatic axis swapping and hardware de-bouncing.
+- Added a dedicated `MemoryManager` class for the two PSRAM framebuffers.
+- Framebuffer allocation is now re-init safe and cannot leave dangling pointers after a partial allocation failure.
+- Framebuffer and display memory-owning classes are non-copyable.
+- Fixed potentially unaligned 32-bit writes in horizontal and rectangle blitters.
+- Fixed touch mapping so coordinates remain inside X `0-479` and Y `0-271`.
+- Replaced mean-of-three touch filtering with median-of-three filtering.
+- Added raw touch diagnostic access and a `Touch-test` example.
+- `NV3047_Driver::begin()` now returns `bool` and propagates initialization failures.
+- Added direct drawing proxies and an explicit `present()` call to the high-level driver.
+- Standardized application brightness usage to `0-100%`.
+- Added framebuffer memory and frame timing diagnostics.
+- Reused the DisplayDriver DMA fill buffer instead of allocating/freeing it on every fill.
+- Reduced the touch SPI queue to the single slot required by polling transfers.
+- Updated stale examples and package metadata.
 
----
+## Important colour mapping note
 
-## 📁 Signature Directory Architecture
-The library is organised into clean, technical subfolders to maintain modular separation:
+The working panel colour layout is **not treated as textbook RGB565**.
+
+The physical 16-bit bus is still arranged as three 5/6/5 banks, but the verified display behaviour requires:
+
+- red on the upper 5-bit bank,
+- physical blue on the middle 6-bit bank,
+- physical green on the lower 5-bit bank.
+
+Therefore these values are intentional:
+
+```cpp
+Config::COLOR_RED   = 0xF800;
+Config::COLOR_GREEN = 0x001F;
+Config::COLOR_BLUE  = 0x07E0;
+```
+
+Do **not** swap GREEN and BLUE back to standard RGB565 values unless the RGB GPIO bank mapping is also reworked and tested on the actual panel.
+
+For generated colours, use:
+
+```cpp
+uint16_t color = Config::packPanelColor(red, green, blue);
+```
+
+where `red`, `green`, and `blue` are normal 0-255 logical colour values. The helper packs them into this panel's verified physical bank order.
+
+## Architecture
+
 ```text
-NV3047/
-├── library.properties        # Arduino IDE library registration metadata
-├── README.md                 # System overview documentation
+NV3047_drivers/
+├── library.properties
+├── readme.md
+├── examples/
+│   ├── Color-test/
+│   ├── Shape-test/
+│   └── Touch-test/
 └── src/
-    ├── Config.h              # Central hardware pins, porches, and clock profiles
-    ├── NV3047.h / .cpp       # Global hardware orchestrator lifecycle manager
-    ├── NV3047_Driver.h/.cpp  # Main application proxy proxy API wrapper
+    ├── Config.h / .cpp
+    ├── NV3047.h / .cpp
+    ├── NV3047_Driver.h / .cpp
     │
-    ├── Core_Matrices/        # Custom double-buffered canvases & blitters
+    ├── Core_Matrices/
+    │   ├── MemoryManager.h / .cpp
     │   ├── framebuffer.h / .cpp
     │   └── blitters.h / .cpp
     │
-    ├── Bus_Layers/           # Parallel bus signal configurations & SPI masters
+    ├── Bus_Layers/
     │   ├── RGB.h / .cpp
     │   └── SPI_Master.h / .cpp
     │
-    └── Peripherals_HAL/      # Screen power controls & inputs remapping matrices
+    └── Peripherals_HAL/
         ├── DisplayDriver.h / .cpp
         └── TouchDriver.h / .cpp
 ```
 
----
+### MemoryManager
 
-## 🛠️ Ideal Arduino IDE Board Configurations
-To guarantee successful compilation and optimal PSRAM allocation, use these exact settings in the **Tools** menu:
-* **Board:** `ESP32-S3 Dev Module`
-* **Flash Size:** `4MB (32Mb)`
-* **Partition Scheme:** `Huge APP (3MB No OTA/1MB SPIFFS)`
-* **Flash Mode:** `QIO`
-* **PSRAM:** `QSPI PSRAM` (Mandatory for dual-framebuffer streaming)
+`MemoryManager` owns the two 64-byte-aligned PSRAM framebuffers.
 
----
+At 480 x 272 RGB565:
 
-## 💻 Clean Baseline Quick Start
-This simple example initializes the entire hardware HAL stack, draws an un-fractured grey boundary frame box, tracks touch coordinate reticles, and animates a benchmark element smoothly at a locked 60Hz pace:
+```text
+One framebuffer:  261,120 bytes
+Two framebuffers: 522,240 bytes
+```
+
+It exposes diagnostic information for buffer size, total framebuffer allocation, free PSRAM, and the largest free PSRAM block.
+
+### Framebuffer
+
+`Framebuffer` is now responsible for rendering and presentation state rather than raw allocation ownership. It draws into the MemoryManager back buffer and swaps buffer identities after a successful panel presentation.
+
+It also tracks:
+
+- frame count,
+- last frame interval in microseconds,
+- approximate presentation FPS.
+
+## Arduino IDE configuration
+
+Use **Arduino-ESP32 core 2.0.17**.
+
+Recommended board settings:
+
+- **Board:** ESP32-S3 Dev Module
+- **Flash Size:** 4MB (32Mb)
+- **Partition Scheme:** Huge APP (3MB No OTA / 1MB SPIFFS)
+- **Flash Mode:** QIO
+- **PSRAM:** QSPI PSRAM
+
+PSRAM is required for the two full-size application framebuffers.
+
+## RGB timing
+
+The known-stable hardware configuration remains:
+
+```cpp
+PCLK_FREQ_HZ = 6000000;
+```
+
+The existing tuned presentation interval of `16546 us` also remains the default because it is part of the known-working Core 2.0.17 setup.
+
+The configuration now additionally calculates the theoretical scan period from the configured resolution and porch values:
+
+```cpp
+Config::Framebuffer::CALCULATED_SCAN_PERIOD_US
+```
+
+To experimentally pace presentation from that calculated value, set:
+
+```cpp
+Config::Framebuffer::USE_CALCULATED_SCAN_CADENCE = true;
+```
+
+The default remains `false` so the overhaul does not silently change the known-working display behaviour.
+
+Hardware VSYNC callbacks and direct zero-copy RGB framebuffer ownership are intentionally **not** enabled in this branch. They are worthwhile experiments later, but they are higher-risk changes on Arduino-ESP32 2.0.17.
+
+## Quick start
 
 ```cpp
 #include <Arduino.h>
-#include "NV3047_Driver.h"
+#include <NV3047_Driver.h>
 
-// Instantiate the underlying hardware layer and application proxy wrapper
-NV3047        hw_instance;
-NV3047_Driver panel;
-
-// Coordinate state tracking variables
-int16_t sync_bar_x = 40;
-int16_t sync_bar_dir = 3;
-const int16_t BAR_WIDTH = 15;
+NV3047 hardware;
+NV3047_Driver display;
 
 void setup() {
     Serial.begin(115200);
-    
-    // Bind and ignite the low-level hardware abstraction layer
-    panel.begin(&hw_instance);
-    
-    // Set baseline brightness to 80% to preserve the glass panel life
-    panel.setBrightness(80);
+
+    if (!display.begin(&hardware)) {
+        Serial.println("NV3047 init failed");
+        while (true) delay(1000);
+    }
+
+    display.setBrightness(80);
 }
 
 void loop() {
-    // Reference the rendering canvas and hardware driver primitives
-    Framebuffer& canvas = hw_instance.getCanvas();
-    
-    uint16_t touch_x = 0;
-    uint16_t touch_y = 0;
-    bool is_currently_touched = panel.getTouch(touch_x, touch_y);
+    display.clear(Config::COLOR_BLACK);
 
-    // 1. Clear the hidden background drawing canvas using 32-bit block shifts
-    canvas.clear(Config::COLOR_BLACK);
+    display.fillRect(
+        40,
+        40,
+        100,
+        60,
+        Config::COLOR_RED);
 
-    // 2. Render static outer diagnostic grid
-    for (int16_t offset = 0; offset < 36; offset += 6) {
-        canvas.drawRect(
-            offset, 
-            offset, 
-            Config::SCREEN_WIDTH - (offset * 2), 
-            Config::SCREEN_HEIGHT - (offset * 2), 
-            Config::COLOR_LIGHT_GREY
-        );
+    if (!display.present()) {
+        Serial.println("Present failed");
     }
-
-    // 3. Process application states
-    if (is_currently_touched) {
-        // Draw crosshair tracking reticle directly under touch point coordinates
-        canvas.drawRect(touch_x - 15, touch_y - 15, 30, 30, Config::COLOR_RED);
-        canvas.drawHLine(touch_x - 25, touch_y, 50, Config::COLOR_WHITE);
-        canvas.drawVLine(touch_x, touch_y - 25, 50, Config::COLOR_WHITE);
-    } else {
-        // Render ultra-smooth benchmark pacing bar inside bounds box
-        canvas.fillRect(sync_bar_x, 38, BAR_WIDTH, Config::SCREEN_HEIGHT - 76, Config::COLOR_WHITE);
-        
-        sync_bar_x += sync_bar_dir;
-        if (sync_bar_x <= 38 || sync_bar_x >= (Config::SCREEN_WIDTH - BAR_WIDTH - 38)) {
-            sync_bar_dir = -sync_bar_dir;
-        }
-    }
-
-    // 4. Swap buffers (Natively regulates frame cadence down to the microsecond)
-    canvas.swap();
 }
 ```
 
----
+`fillScreen(color)` is retained for simple sketches and immediately presents the filled frame. For multi-draw frames, use `clear()`, drawing calls, then `present()`.
 
-## 📜 Licence
-Created by **AirysDark**. Built strictly for high-performance embedded systems development. Feel free to use this as a modular low-level hardware engine package for any custom graphical framework libraries.
+## Memory diagnostics
+
+```cpp
+Framebuffer& canvas = hardware.getCanvas();
+MemoryManager& memory = canvas.getMemoryManager();
+
+Serial.println(memory.getBufferSizeBytes());
+Serial.println(memory.getTotalAllocatedBytes());
+Serial.println(memory.getFreePsramBytes());
+Serial.println(memory.getLargestFreePsramBlockBytes());
+
+Serial.println(canvas.getFrameCount());
+Serial.println(canvas.getLastFrameTimeUs());
+Serial.println(canvas.getApproxFPS());
+```
+
+## Touch diagnostics
+
+The normal touch path uses three samples per axis and chooses the median sample to reject single ADC spikes.
+
+The public mapped coordinates are clamped to:
+
+```text
+X: 0-479
+Y: 0-271
+```
+
+For calibration work, `TouchDriver::getRawTouch()` exposes the verified raw XPT2046 values without changing the working command-byte layout.
+
+See `examples/Touch-test/Touch-test.ino`.
+
+## Notes for future optimization
+
+The current design intentionally keeps the ESP-IDF RGB driver's own framebuffer behaviour plus the two application render buffers because that is the stable Core 2.0.17 configuration.
+
+A future experimental branch can investigate:
+
+1. direct/zero-copy RGB framebuffer ownership,
+2. hardware frame-event synchronization,
+3. dirty-region presentation,
+4. additional low-level geometry primitives.
+
+Those changes should be benchmarked on the real panel rather than folded into the stable driver path blindly.
+
+## Licence
+
+Created by **AirysDark** for embedded display development.
