@@ -7,6 +7,18 @@ void setup() {
     Serial.begin(115200);
     delay(1000);
 
+    Serial.print("RGB profile: ");
+    Serial.println(Config::RGB_PROFILE_NAME);
+
+    Serial.print("PCLK/DE/VSYNC/HSYNC: ");
+    Serial.print(Config::PIN_RGB_PCLK);
+    Serial.print("/");
+    Serial.print(Config::PIN_RGB_DE);
+    Serial.print("/");
+    Serial.print(Config::PIN_RGB_VSYNC);
+    Serial.print("/");
+    Serial.println(Config::PIN_RGB_HSYNC);
+
     Serial.println("Initializing NV3047 hardware...");
 
     if (!myScreen.begin(&hardware)) {
