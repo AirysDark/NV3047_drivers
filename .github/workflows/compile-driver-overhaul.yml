@@ -41,7 +41,7 @@ jobs:
           arduino-cli compile \
             --fqbn esp32:esp32:esp32s3 \
             --library . \
-            examples/Color-test
+            .github/sketches/LocalDriverMode
 
       - name: Compile takeover - memory include first
         run: |
