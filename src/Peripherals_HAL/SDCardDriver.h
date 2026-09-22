@@ -14,7 +14,12 @@ public:
     bool init();
     void end();
 
+    // Runtime-safe eject command.
+    // Close all application-owned fs::File handles before calling this.
+    bool prepareForRemoval();
+
     bool isMounted() const { return mounted; }
+    bool isSafeToRemove() const { return safe_to_remove; }
 
     sdcard_type_t cardType() const;
     uint64_t cardSizeBytes() const;
@@ -34,4 +39,5 @@ public:
 
 private:
     bool mounted = false;
+    bool safe_to_remove = true;
 };
