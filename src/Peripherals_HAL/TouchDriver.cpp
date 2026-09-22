@@ -1,11 +1,10 @@
 #include "TouchDriver.h"
 
-#include <driver/gpio.h>
+#include <Arduino.h>
 
 namespace {
 
 uint16_t medianSamples(uint16_t* values, size_t count) {
-    // Small insertion sort: predictable and cheap for the configured 3-9 samples.
     for (size_t i = 1; i < count; ++i) {
         const uint16_t key = values[i];
         size_t j = i;
@@ -23,48 +22,55 @@ uint16_t medianSamples(uint16_t* values, size_t count) {
 
 } // namespace
 
-bool TouchDriver::init(spi_device_handle_t handle) {
-    spi_handle = handle;
+bool TouchDriver::init(SPIClass& bus) {
+    spi_bus = &bus;
     was_pressed_last_frame = false;
     is_pressed_current_frame = false;
 
-    if (!spi_handle) return false;
+    pinMode(Config::PIN_TOUCH_CS, OUTPUT);
+    digitalWrite(Config::PIN_TOUCH_CS, HIGH);
 
-    gpio_config_t io_conf = {};
-    io_conf.pin_bit_mask = (1ULL << Config::PIN_TOUCH_IRQ);
-    io_conf.mode = GPIO_MODE_INPUT;
-    io_conf.pull_up_en = GPIO_PULLUP_ENABLE;
+    pinMode(Config::PIN_TOUCH_IRQ, INPUT_PULLUP);
 
-    return gpio_config(&io_conf) == ESP_OK;
+    return spi_bus->bus() != nullptr;
 }
 
 bool TouchDriver::transfer16(uint8_t cmd, uint16_t &value) {
     value = 0;
 
-    if (!spi_handle) return false;
+    if (!spi_bus || !spi_bus->bus()) {
+        return false;
+    }
 
     uint8_t tx_data[3] = {cmd, 0x00, 0x00};
     uint8_t rx_data[3] = {0, 0, 0};
 
-    spi_transaction_t transaction = {};
-    transaction.length = 24;
-    transaction.tx_buffer = tx_data;
-    transaction.rx_buffer = rx_data;
+    spi_bus->beginTransaction(
+        SPISettings(
+            Config::SPI::TOUCH_CLOCK_HZ,
+            MSBFIRST,
+            SPI_MODE0));
 
-    if (spi_device_polling_transmit(spi_handle, &transaction) != ESP_OK) {
-        return false;
-    }
+    digitalWrite(Config::PIN_TOUCH_CS, LOW);
+    spi_bus->transferBytes(tx_data, rx_data, sizeof(tx_data));
+    digitalWrite(Config::PIN_TOUCH_CS, HIGH);
 
-    // Retain the verified working byte alignment for Arduino-ESP32 core 2.0.17.
-    const uint16_t high_byte = static_cast<uint16_t>(rx_data[0]) << 8;
-    const uint16_t low_byte = static_cast<uint16_t>(rx_data[1]);
+    spi_bus->endTransaction();
 
-    value = static_cast<uint16_t>((high_byte | low_byte) >> 3);
+    // Preserve the byte alignment already validated by this project.
+    const uint16_t high_byte =
+        static_cast<uint16_t>(rx_data[0]) << 8;
+    const uint16_t low_byte =
+        static_cast<uint16_t>(rx_data[1]);
+
+    value =
+        static_cast<uint16_t>((high_byte | low_byte) >> 3);
+
     return true;
 }
 
 bool TouchDriver::readRawPair(uint16_t &raw_x, uint16_t &raw_y) {
-    if (!spi_handle || !isPressed()) return false;
+    if (!spi_bus || !isPressed()) return false;
 
     if (!transfer16(Config::Touch::X_COMMAND, raw_x)) {
         return false;
@@ -78,8 +84,7 @@ bool TouchDriver::readRawPair(uint16_t &raw_x, uint16_t &raw_y) {
 }
 
 bool TouchDriver::isPressed() {
-    return gpio_get_level(
-        static_cast<gpio_num_t>(Config::PIN_TOUCH_IRQ)) == 0;
+    return digitalRead(Config::PIN_TOUCH_IRQ) == LOW;
 }
 
 bool TouchDriver::isNewPress() {
@@ -145,14 +150,18 @@ bool TouchDriver::getTouch(uint16_t &x, uint16_t &y) {
     }
 
     uint32_t mapped_x =
-        (static_cast<uint32_t>(raw_x - Config::Touch::RAW_X_MIN) *
+        (static_cast<uint32_t>(
+             raw_x - Config::Touch::RAW_X_MIN) *
          (Config::SCREEN_WIDTH - 1U)) /
-        (Config::Touch::RAW_X_MAX - Config::Touch::RAW_X_MIN);
+        (Config::Touch::RAW_X_MAX -
+         Config::Touch::RAW_X_MIN);
 
     uint32_t mapped_y =
-        (static_cast<uint32_t>(raw_y - Config::Touch::RAW_Y_MIN) *
+        (static_cast<uint32_t>(
+             raw_y - Config::Touch::RAW_Y_MIN) *
          (Config::SCREEN_HEIGHT - 1U)) /
-        (Config::Touch::RAW_Y_MAX - Config::Touch::RAW_Y_MIN);
+        (Config::Touch::RAW_Y_MAX -
+         Config::Touch::RAW_Y_MIN);
 
     if (mapped_x >= Config::SCREEN_WIDTH) {
         mapped_x = Config::SCREEN_WIDTH - 1U;
