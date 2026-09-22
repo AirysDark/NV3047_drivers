@@ -242,6 +242,19 @@ constexpr RGBProfile ACTIVE_RGB_PROFILE =
     RGBProfile::V21_MATRIX_TEST;
 ```
 
+Selecting `V21_MATRIX_TEST` also enables the complete V2.1 shared-peripheral startup path:
+
+```text
+GPIO0  = TP_CS
+GPIO10 = SD_CS
+GPIO12 = shared SCLK
+GPIO11 = shared MOSI
+GPIO13 = shared MISO
+GPIO36 = TP_IRQ
+```
+
+The TF card is automatically mounted during `NV3047::init()`. If a card is present and readable, `isSDMounted()` is true when initialization returns. If no card is inserted or mounting fails, LCD and touch initialization still succeeds; the application can insert a card later and call `getSDCard()->init()`.
+
 To revert immediately:
 
 ```cpp
@@ -487,12 +500,21 @@ Both chip-select pins are held high when inactive.
 
 The display and touch do not require an SD card to be installed.
 
-Mount or remount a card with:
+With `V21_MATRIX_TEST`, the driver automatically attempts the initial TF mount. The mount result is available through:
 
 ```cpp
-SDCardDriver sd;
+display.isSDMounted();
+display.getSDCard();
+```
 
-if (sd.init()) {
+A missing or unreadable card is deliberately non-fatal so an SD fault cannot prevent the display/touch system from starting.
+
+For a manual mount or remount:
+
+```cpp
+SDCardDriver* sd = display.getSDCard();
+
+if (sd && sd->init()) {
     // SD mounted.
 }
 ```
@@ -503,7 +525,7 @@ Before physical removal, close application-owned files and issue:
 logFile.flush();
 logFile.close();
 
-if (sd.prepareForRemoval()) {
+if (sd && sd->prepareForRemoval()) {
     // SAFE TO REMOVE SD CARD
 }
 ```
@@ -511,13 +533,13 @@ if (sd.prepareForRemoval()) {
 Then:
 
 ```cpp
-sd.isMounted();       // false
-sd.isSafeToRemove();  // true
+sd->isMounted();       // false
+sd->isSafeToRemove();  // true
 ```
 
 `SD.end()` unmounts the filesystem, but the shared SPI controller remains running because touch still needs it.
 
-After inserting a card again, call `sd.init()`.
+After inserting a card again, call `sd->init()`.
 
 ## Origin of the V2.1 RGB test profile
 
