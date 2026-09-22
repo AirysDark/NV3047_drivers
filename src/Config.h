@@ -41,24 +41,56 @@ namespace Config {
     constexpr int PIN_BACKLIGHT = 2;
 
     // ============================================================
-    // TOUCH PINS
+    // SHARED PERIPHERAL SPI BUS + TOUCH PINS
     // ============================================================
+    // PCB silkscreen verified:
+    // IO12 = TP_CLK, IO11 = TP_DIN, IO13 = TP_OUT,
+    // IO10 = TP_CS,  IO36 = TP_IRQ.
+    //
+    // The TF/microSD slot is believed to share the SPI clock/data lines.
+    // Its chip-select has NOT yet been identified, so SD mounting stays disabled.
     constexpr spi_host_device_t SPI_HOST_ID = SPI3_HOST;
-    constexpr int PIN_SPI_SCLK  = 20;
-    constexpr int PIN_SPI_MOSI  = 19;
-    constexpr int PIN_SPI_MISO  = -1;
-    constexpr int PIN_TOUCH_CS  = 18;
+
+    constexpr int PIN_SHARED_SPI_SCLK = 12;
+    constexpr int PIN_SHARED_SPI_MOSI = 11;
+    constexpr int PIN_SHARED_SPI_MISO = 13;
+
+    constexpr int PIN_TOUCH_CS  = 10;
     constexpr int PIN_TOUCH_IRQ = 36;
 
+    // Backward-compatible aliases used by existing bus-layer code.
+    constexpr int PIN_SPI_SCLK = PIN_SHARED_SPI_SCLK;
+    constexpr int PIN_SPI_MOSI = PIN_SHARED_SPI_MOSI;
+    constexpr int PIN_SPI_MISO = PIN_SHARED_SPI_MISO;
 
     // ============================================================
     // MICRO-SD (TF) CARD PINS
     // ============================================================
-    // Confirmed DIS06043H SPI SD wiring.
-    constexpr int PIN_SD_CS   = 10;
-    constexpr int PIN_SD_CLK  = 12;
-    constexpr int PIN_SD_MOSI = 11;
-    constexpr int PIN_SD_MISO = 13;
+    // TF shares the SPI data/clock bus with touch. CS is still unknown.
+    constexpr int PIN_SD_CS   = -1;
+    constexpr int PIN_SD_CLK  = PIN_SHARED_SPI_SCLK;
+    constexpr int PIN_SD_MOSI = PIN_SHARED_SPI_MOSI;
+    constexpr int PIN_SD_MISO = PIN_SHARED_SPI_MISO;
+
+    // ============================================================
+    // EXTERNAL EXPANSION / BOARD SILKSCREEN PINS
+    // ============================================================
+    namespace Expansion {
+        constexpr int UART1_RX = 18;
+        constexpr int UART1_TX = 17;
+
+        constexpr int GPIO_D0 = 38;
+        constexpr int GPIO_D1 = 37;
+    }
+
+    // ============================================================
+    // I2S BOARD SILKSCREEN PINS
+    // ============================================================
+    namespace I2S {
+        constexpr int LRCLK = 19;
+        constexpr int BCLK  = 35;
+        constexpr int SDIN  = 20;
+    }
 
     // ============================================================
     // RGB PANEL TIMING
@@ -136,17 +168,25 @@ namespace Config {
     // SD CARD CONFIGURATION
     // ============================================================
     namespace SDCard {
-        // Conservative default for broad card compatibility.
-        // Can be increased later from Config.h after hardware testing.
+        // TF is intentionally disabled until its chip-select is confirmed.
+        constexpr bool ENABLED = false;
+        constexpr bool SHARES_TOUCH_SPI_BUS = true;
+
+        // Conservative default for broad card compatibility once enabled.
         constexpr uint32_t CLOCK_HZ = 4000000;
 
         constexpr const char* MOUNT_POINT = "/sd";
         constexpr uint8_t MAX_OPEN_FILES = 5;
         constexpr bool FORMAT_IF_MOUNT_FAILED = false;
-        constexpr bool END_SPI_ON_UNMOUNT = true;
+
+        // Never shut down the shared SPI bus during SD eject; touch still needs it.
+        constexpr bool END_SPI_ON_UNMOUNT = false;
 
         static_assert(CLOCK_HZ > 0, "SD card SPI clock must be greater than zero");
         static_assert(MAX_OPEN_FILES > 0, "SD card must allow at least one open file");
+        static_assert(
+            !ENABLED || PIN_SD_CS >= 0,
+            "Enable SD only after the TF chip-select GPIO has been confirmed");
     }
 
     // ============================================================
