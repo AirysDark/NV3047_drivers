@@ -1,8 +1,9 @@
 #include "NV3047.h"
 
 bool NV3047::init() {
-    // Bring the shared SPI lines up first and immediately de-assert both
-    // GPIO0 TP_CS and GPIO10 SD_CS.
+    // Bring up the selected hardware profile's touch SPI wiring first.
+    // LEGACY_WORKING preserves main's GPIO20/19 + GPIO18 CS map.
+    // V21_MATRIX_TEST uses GPIO12/11/13 + GPIO0 CS and also de-asserts SD CS.
     if (!spiMaster.init()) return false;
     if (!touch.init(spiMaster.bus())) return false;
 
