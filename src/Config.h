@@ -12,135 +12,53 @@ namespace Config {
     constexpr uint16_t SCREEN_HEIGHT = 272;
 
     // ============================================================
-    // RGB PANEL PROFILE
-    // ============================================================
-    // LEGACY_WORKING:
-    //   Hardware-tested mapping already known to produce a stable image.
-    //
-    // V21_MATRIX_TEST:
-    //   Proposed V2.1 GPIO-matrix assignment. Use only for controlled testing.
-    //   It intentionally keeps the proven legacy timing values so pin routing
-    //   and colour order can be evaluated without changing two variables at once.
-    enum class RGBProfile : uint8_t {
-        LEGACY_WORKING = 0,
-        V21_MATRIX_TEST = 1
-    };
-
-    constexpr RGBProfile ACTIVE_RGB_PROFILE =
-        RGBProfile::LEGACY_WORKING;
-
-    constexpr bool RGB_V21_MATRIX_ACTIVE =
-        ACTIVE_RGB_PROFILE == RGBProfile::V21_MATRIX_TEST;
-
-    constexpr const char* RGB_PROFILE_NAME =
-        RGB_V21_MATRIX_ACTIVE
-            ? "V21_MATRIX_TEST"
-            : "LEGACY_WORKING";
-
-    // ============================================================
     // RGB PANEL PINS
     // ============================================================
-    constexpr int PIN_RGB_B0 = RGB_V21_MATRIX_ACTIVE ? 5  : 15;
-    constexpr int PIN_RGB_B1 = RGB_V21_MATRIX_ACTIVE ? 6  : 7;
-    constexpr int PIN_RGB_B2 = RGB_V21_MATRIX_ACTIVE ? 7  : 6;
-    constexpr int PIN_RGB_B3 = RGB_V21_MATRIX_ACTIVE ? 15 : 5;
-    constexpr int PIN_RGB_B4 = RGB_V21_MATRIX_ACTIVE ? 16 : 4;
+    // Fixed hardware map: the established Legacy Working baseline.
+    constexpr int PIN_RGB_B0 = 15;
+    constexpr int PIN_RGB_B1 = 7;
+    constexpr int PIN_RGB_B2 = 6;
+    constexpr int PIN_RGB_B3 = 5;
+    constexpr int PIN_RGB_B4 = 4;
 
-    constexpr int PIN_RGB_G0 = RGB_V21_MATRIX_ACTIVE ? 1  : 9;
-    constexpr int PIN_RGB_G1 = RGB_V21_MATRIX_ACTIVE ? 48 : 46;
-    constexpr int PIN_RGB_G2 = RGB_V21_MATRIX_ACTIVE ? 47 : 3;
-    constexpr int PIN_RGB_G3 = RGB_V21_MATRIX_ACTIVE ? 21 : 8;
-    constexpr int PIN_RGB_G4 = RGB_V21_MATRIX_ACTIVE ? 14 : 16;
-    constexpr int PIN_RGB_G5 = RGB_V21_MATRIX_ACTIVE ? 38 : 1;
+    constexpr int PIN_RGB_G0 = 9;
+    constexpr int PIN_RGB_G1 = 46;
+    constexpr int PIN_RGB_G2 = 3;
+    constexpr int PIN_RGB_G3 = 8;
+    constexpr int PIN_RGB_G4 = 16;
+    constexpr int PIN_RGB_G5 = 1;
 
-    constexpr int PIN_RGB_R0 = RGB_V21_MATRIX_ACTIVE ? 45 : 14;
-    constexpr int PIN_RGB_R1 = RGB_V21_MATRIX_ACTIVE ? 42 : 21;
-    constexpr int PIN_RGB_R2 = RGB_V21_MATRIX_ACTIVE ? 41 : 47;
-    constexpr int PIN_RGB_R3 = RGB_V21_MATRIX_ACTIVE ? 40 : 48;
-    constexpr int PIN_RGB_R4 = RGB_V21_MATRIX_ACTIVE ? 39 : 45;
+    constexpr int PIN_RGB_R0 = 14;
+    constexpr int PIN_RGB_R1 = 21;
+    constexpr int PIN_RGB_R2 = 47;
+    constexpr int PIN_RGB_R3 = 48;
+    constexpr int PIN_RGB_R4 = 45;
 
-    constexpr int PIN_RGB_DE =
-        RGB_V21_MATRIX_ACTIVE ? 4 : 40;
-    constexpr int PIN_RGB_VSYNC =
-        RGB_V21_MATRIX_ACTIVE ? 3 : 41;
-    constexpr int PIN_RGB_HSYNC =
-        RGB_V21_MATRIX_ACTIVE ? 46 : 39;
-    constexpr int PIN_RGB_PCLK =
-        RGB_V21_MATRIX_ACTIVE ? 9 : 42;
+    constexpr int PIN_RGB_DE    = 40;
+    constexpr int PIN_RGB_VSYNC = 41;
+    constexpr int PIN_RGB_HSYNC = 39;
+    constexpr int PIN_RGB_PCLK  = 42;
 
     constexpr int PIN_BACKLIGHT = 2;
 
     // ============================================================
-    // TOUCH / PERIPHERAL SPI PROFILE
+    // TOUCH SPI PINS
     // ============================================================
-    // LEGACY_WORKING preserves the original main-branch touch wiring:
-    //   SCLK=20, MOSI=19, MISO=-1, TP_CS=18, TP_IRQ=36.
-    //
-    // V21_MATRIX_TEST uses the photographed/published V2.1 shared bus:
-    //   SCLK=12, MOSI=11, MISO=13, TP_CS=0, TP_IRQ=36.
-    //   TF/microSD shares those clock/data lines with CS on GPIO10.
-    constexpr int PIN_LEGACY_TOUCH_SCLK = 20;
-    constexpr int PIN_LEGACY_TOUCH_MOSI = 19;
-    constexpr int PIN_LEGACY_TOUCH_MISO = -1;
-    constexpr int PIN_LEGACY_TOUCH_CS   = 18;
-
-    constexpr int PIN_V21_SHARED_SPI_SCLK = 12;
-    constexpr int PIN_V21_SHARED_SPI_MOSI = 11;
-    constexpr int PIN_V21_SHARED_SPI_MISO = 13;
-    constexpr int PIN_V21_TOUCH_CS        = 0;
-    constexpr int PIN_V21_SD_CS           = 10;
-
-    constexpr int PIN_SPI_SCLK =
-        RGB_V21_MATRIX_ACTIVE
-            ? PIN_V21_SHARED_SPI_SCLK
-            : PIN_LEGACY_TOUCH_SCLK;
-
-    constexpr int PIN_SPI_MOSI =
-        RGB_V21_MATRIX_ACTIVE
-            ? PIN_V21_SHARED_SPI_MOSI
-            : PIN_LEGACY_TOUCH_MOSI;
-
-    constexpr int PIN_SPI_MISO =
-        RGB_V21_MATRIX_ACTIVE
-            ? PIN_V21_SHARED_SPI_MISO
-            : PIN_LEGACY_TOUCH_MISO;
-
-    constexpr int PIN_TOUCH_CS =
-        RGB_V21_MATRIX_ACTIVE
-            ? PIN_V21_TOUCH_CS
-            : PIN_LEGACY_TOUCH_CS;
-
+    // Fixed hardware map from the established Legacy Working baseline.
+    constexpr int PIN_SPI_SCLK  = 20;
+    constexpr int PIN_SPI_MOSI  = 19;
+    constexpr int PIN_SPI_MISO  = -1;
+    constexpr int PIN_TOUCH_CS  = 18;
     constexpr int PIN_TOUCH_IRQ = 36;
-
-    // Backward-compatible V2.1 shared-bus names.
-    constexpr int PIN_SHARED_SPI_SCLK = PIN_V21_SHARED_SPI_SCLK;
-    constexpr int PIN_SHARED_SPI_MOSI = PIN_V21_SHARED_SPI_MOSI;
-    constexpr int PIN_SHARED_SPI_MISO = PIN_V21_SHARED_SPI_MISO;
 
     // ============================================================
     // MICRO-SD (TF) CARD PINS
     // ============================================================
-    // TF belongs to the V2.1 hardware profile. Legacy mode deliberately
-    // leaves it unconfigured so the old main-branch peripheral map is preserved.
-    constexpr int PIN_SD_CS =
-        RGB_V21_MATRIX_ACTIVE
-            ? PIN_V21_SD_CS
-            : -1;
-
-    constexpr int PIN_SD_CLK =
-        RGB_V21_MATRIX_ACTIVE
-            ? PIN_V21_SHARED_SPI_SCLK
-            : -1;
-
-    constexpr int PIN_SD_MOSI =
-        RGB_V21_MATRIX_ACTIVE
-            ? PIN_V21_SHARED_SPI_MOSI
-            : -1;
-
-    constexpr int PIN_SD_MISO =
-        RGB_V21_MATRIX_ACTIVE
-            ? PIN_V21_SHARED_SPI_MISO
-            : -1;
+    // The fixed baseline does not currently configure the TF interface.
+    constexpr int PIN_SD_CS   = -1;
+    constexpr int PIN_SD_CLK  = -1;
+    constexpr int PIN_SD_MOSI = -1;
+    constexpr int PIN_SD_MISO = -1;
 
     // ============================================================
     // EXTERNAL EXPANSION / BOARD SILKSCREEN PINS
@@ -152,14 +70,11 @@ namespace Config {
         constexpr int GPIO_D0 = 38;
         constexpr int GPIO_D1 = 37;
 
-        // Legacy touch uses GPIO18 as TP_CS, so UART1_RX is only free in V2.1.
-        constexpr bool UART1_RX_AVAILABLE =
-            RGB_V21_MATRIX_ACTIVE;
+        // GPIO18 is currently consumed by touch CS.
+        constexpr bool UART1_RX_AVAILABLE = false;
         constexpr bool UART1_TX_AVAILABLE = true;
 
-        // Proposed V2.1 RGB profile consumes GPIO38 as LCD G5.
-        constexpr bool GPIO_D0_AVAILABLE =
-            !RGB_V21_MATRIX_ACTIVE;
+        constexpr bool GPIO_D0_AVAILABLE = true;
         constexpr bool GPIO_D1_AVAILABLE = true;
     }
 
@@ -171,12 +86,10 @@ namespace Config {
         constexpr int BCLK  = 35;
         constexpr int SDIN  = 20;
 
-        // Legacy touch consumes GPIO19 (MOSI) and GPIO20 (SCLK).
-        constexpr bool LRCLK_AVAILABLE =
-            RGB_V21_MATRIX_ACTIVE;
+        // GPIO19 and GPIO20 are currently consumed by touch.
+        constexpr bool LRCLK_AVAILABLE = false;
         constexpr bool BCLK_AVAILABLE = true;
-        constexpr bool SDIN_AVAILABLE =
-            RGB_V21_MATRIX_ACTIVE;
+        constexpr bool SDIN_AVAILABLE = false;
     }
 
     // ============================================================
@@ -219,31 +132,22 @@ namespace Config {
     // ============================================================
     // PANEL COLOUR MAPPING
     // ============================================================
-    // Legacy hardware testing required GREEN/BLUE compensation.
-    // The V2.1 matrix test profile intentionally uses textbook RGB565 so the
-    // test can reveal whether the legacy colour swap was caused by GPIO/data
-    // lane ordering rather than the panel's native colour format.
+    // Hardware testing with the fixed RGB map requires green/blue
+    // compensation. Keep generated colours in the same physical bank order.
     constexpr uint16_t packPanelColor(
         uint8_t red,
         uint8_t green,
         uint8_t blue) {
 
-        return RGB_V21_MATRIX_ACTIVE
-            ? static_cast<uint16_t>(
-                (static_cast<uint16_t>(red & 0xF8U) << 8) |
-                (static_cast<uint16_t>(green & 0xFCU) << 3) |
-                (static_cast<uint16_t>(blue) >> 3))
-            : static_cast<uint16_t>(
-                (static_cast<uint16_t>(red & 0xF8U) << 8) |
-                (static_cast<uint16_t>(blue & 0xFCU) << 3) |
-                (static_cast<uint16_t>(green) >> 3));
+        return static_cast<uint16_t>(
+            (static_cast<uint16_t>(red & 0xF8U) << 8) |
+            (static_cast<uint16_t>(blue & 0xFCU) << 3) |
+            (static_cast<uint16_t>(green) >> 3));
     }
 
-    constexpr uint16_t COLOR_RED = 0xF800;
-    constexpr uint16_t COLOR_GREEN =
-        RGB_V21_MATRIX_ACTIVE ? 0x07E0 : 0x001F;
-    constexpr uint16_t COLOR_BLUE =
-        RGB_V21_MATRIX_ACTIVE ? 0x001F : 0x07E0;
+    constexpr uint16_t COLOR_RED        = 0xF800;
+    constexpr uint16_t COLOR_GREEN      = 0x001F;
+    constexpr uint16_t COLOR_BLUE       = 0x07E0;
     constexpr uint16_t COLOR_WHITE      = 0xFFFF;
     constexpr uint16_t COLOR_BLACK      = 0x0000;
     constexpr uint16_t COLOR_LIGHT_GREY = 0xF7DE;
@@ -255,15 +159,13 @@ namespace Config {
     namespace SPI {
         constexpr int TOUCH_CLOCK_HZ = 1000000;
 
-        // LEGACY_WORKING reproduces the original main-branch ESP-IDF
-        // dedicated touch transport. V2.1 uses Arduino SPIClass instead.
-        constexpr spi_host_device_t LEGACY_TOUCH_HOST = SPI3_HOST;
-        constexpr int LEGACY_MAX_TRANSFER_BYTES = 32;
-        constexpr int LEGACY_QUEUE_SIZE = 7;
+        constexpr spi_host_device_t TOUCH_HOST = SPI3_HOST;
+        constexpr int MAX_TRANSFER_BYTES = 32;
+        constexpr int QUEUE_SIZE = 7;
 
         static_assert(TOUCH_CLOCK_HZ > 0, "Touch SPI clock must be greater than zero");
-        static_assert(LEGACY_MAX_TRANSFER_BYTES >= 3, "Legacy touch SPI transfer size is too small");
-        static_assert(LEGACY_QUEUE_SIZE > 0, "Legacy touch SPI queue size must be positive");
+        static_assert(MAX_TRANSFER_BYTES >= 3, "Touch SPI transfer size is too small");
+        static_assert(QUEUE_SIZE > 0, "Touch SPI queue size must be positive");
     }
 
 
@@ -271,32 +173,21 @@ namespace Config {
     // SD CARD CONFIGURATION
     // ============================================================
     namespace SDCard {
-        // SD/TF is part of the V2.1 peripheral profile, not the old main map.
-        constexpr bool ENABLED =
-            RGB_V21_MATRIX_ACTIVE;
-        constexpr bool SHARES_TOUCH_SPI_BUS =
-            RGB_V21_MATRIX_ACTIVE;
+        constexpr bool ENABLED = false;
+        constexpr bool SHARES_TOUCH_SPI_BUS = false;
+        constexpr bool AUTO_MOUNT = false;
 
-        // Selecting the V2.1 RGB matrix profile also brings the onboard
-        // TF interface up automatically. A missing card is non-fatal.
-        constexpr bool AUTO_MOUNT_WITH_ACTIVE_PROFILE =
-            RGB_V21_MATRIX_ACTIVE;
-
-        // Conservative default for broad card compatibility.
         constexpr uint32_t CLOCK_HZ = 4000000;
-
         constexpr const char* MOUNT_POINT = "/sd";
         constexpr uint8_t MAX_OPEN_FILES = 5;
         constexpr bool FORMAT_IF_MOUNT_FAILED = false;
-
-        // Never shut down the shared SPI bus during SD eject; touch still needs it.
         constexpr bool END_SPI_ON_UNMOUNT = false;
 
         static_assert(CLOCK_HZ > 0, "SD card SPI clock must be greater than zero");
         static_assert(MAX_OPEN_FILES > 0, "SD card must allow at least one open file");
         static_assert(
             !ENABLED || PIN_SD_CS >= 0,
-            "Enabled TF profile requires a chip-select GPIO");
+            "Enabled TF configuration requires a chip-select GPIO");
         static_assert(
             !ENABLED || PIN_SD_CS != PIN_TOUCH_CS,
             "TF and touch require independent chip-select GPIOs");
