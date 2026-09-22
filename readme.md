@@ -20,7 +20,7 @@ This branch is intentionally built around **Arduino-ESP32 core 2.0.17**. The 6 M
 - Reused the DisplayDriver DMA fill buffer instead of allocating/freeing it on every fill.
 - Reduced the touch SPI queue to the single slot required by polling transfers.
 - Updated stale examples and package metadata.
-- Corrected the active touch SPI pins from the actual PCB silkscreen.
+- Made touch SPI pinning profile-aware: `LEGACY_WORKING` preserves the original `main` pins, while `V21_MATRIX_TEST` uses the V2.1 PCB pinout.
 - Documented PCB-verified UART1, GPIO_D and I2S pins.
 - Added shared-bus SD/TF support with independent TF chip-select, runtime safe-removal, and one SPI mutex shared with XPT2046 touch.
 
@@ -175,7 +175,9 @@ RGBProfile::V21_MATRIX_TEST
 
 ### LEGACY_WORKING
 
-This preserves the hardware-tested map:
+This preserves the original `main` hardware baseline.
+
+RGB:
 
 ```text
 PCLK  = 42
@@ -188,7 +190,19 @@ G: 9, 46, 3, 8, 16, 1
 R: 14, 21, 47, 48, 45
 ```
 
-and preserves the compensated colour constants:
+Touch:
+
+```text
+SCLK  = GPIO20
+MOSI  = GPIO19
+MISO  = -1
+TP_CS = GPIO18
+TP_IRQ= GPIO36
+```
+
+SD/TF is not configured in this profile, matching the old `main` peripheral map.
+
+The profile also preserves the compensated colour constants:
 
 ```cpp
 RED   = 0xF800
@@ -361,28 +375,37 @@ Serial.println(canvas.getApproxFPS());
 
 ## Touch diagnostics
 
-For hardware revision **V2.1**, the photographed PCB silkscreen and Elecrow's published V2.1 definition agree on the XPT2046 interface:
+Touch wiring now follows the selected hardware profile.
+
+`LEGACY_WORKING` preserves the old `main` touch map:
 
 ```text
-GPIO0  = TP_CS
-GPIO12 = TP_CLK
-GPIO11 = TP_DIN / MOSI
-GPIO13 = TP_OUT / MISO
+GPIO20 = TP_CLK
+GPIO19 = TP_DIN / MOSI
+MISO   = not assigned (-1)
+GPIO18 = TP_CS
 GPIO36 = TP_IRQ
 ```
 
-The active configuration is therefore:
+`V21_MATRIX_TEST` uses the photographed/published V2.1 touch map:
 
-```cpp
-constexpr int PIN_SHARED_SPI_SCLK = 12;
-constexpr int PIN_SHARED_SPI_MOSI = 11;
-constexpr int PIN_SHARED_SPI_MISO = 13;
-
-constexpr int PIN_TOUCH_CS  = 0;
-constexpr int PIN_TOUCH_IRQ = 36;
+```text
+GPIO12 = TP_CLK
+GPIO11 = TP_DIN / MOSI
+GPIO13 = TP_OUT / MISO
+GPIO0  = TP_CS
+GPIO36 = TP_IRQ
 ```
 
-GPIO0 is an ESP32-S3 boot-strapping pin, so the driver keeps TP_CS inactive/high whenever touch is not being addressed. The board hardware is designed around this connection.
+The active values are exposed through:
+
+```cpp
+Config::PIN_SPI_SCLK
+Config::PIN_SPI_MOSI
+Config::PIN_SPI_MISO
+Config::PIN_TOUCH_CS
+Config::PIN_TOUCH_IRQ
+```
 
 The normal touch path uses the odd sample count configured in `Config::Touch::SAMPLE_COUNT` (default 3) and chooses the median sample to reject ADC spikes.
 
@@ -431,7 +454,7 @@ Config::Expansion::GPIO_D0 = 38;
 Config::Expansion::GPIO_D1 = 37;
 ```
 
-These pins no longer conflict with the corrected active touch mapping.
+Availability depends on the selected profile. In `LEGACY_WORKING`, GPIO18 is used as TP_CS, so UART1 RX is not free. In `V21_MATRIX_TEST`, GPIO18 is free for UART1 RX.
 
 ## PCB-verified I2S pins
 
@@ -451,9 +474,11 @@ Config::I2S::BCLK  = 35;
 Config::I2S::SDIN  = 20;
 ```
 
-The NV3047 driver does not yet initialize the audio path; these are reserved for future speaker/I2S support.
+The NV3047 driver does not yet initialize the audio path. In `LEGACY_WORKING`, GPIO19 and GPIO20 are consumed by touch, so LRCLK and SDIN are not available for I2S. In `V21_MATRIX_TEST`, those pins are free for the documented I2S mapping.
 
 ## Shared XPT2046 + TF SPI bus
+
+This shared-bus arrangement applies only to `V21_MATRIX_TEST`.
 
 Touch and the microSD/TF slot share:
 
@@ -463,14 +488,16 @@ MOSI = GPIO11
 MISO = GPIO13
 ```
 
-but have independent chip selects:
+with independent chip selects:
 
 ```text
 TP_CS = GPIO0
 SD_CS = GPIO10
 ```
 
-The active SD configuration is:
+In `LEGACY_WORKING`, touch instead uses GPIO20/GPIO19 with TP_CS on GPIO18 and SD/TF is disabled.
+
+The V2.1 SD configuration is:
 
 ```cpp
 constexpr int PIN_SD_CS   = 10;
@@ -480,8 +507,8 @@ constexpr int PIN_SD_MISO = PIN_SHARED_SPI_MISO;
 
 namespace Config {
 namespace SDCard {
-    constexpr bool ENABLED = true;
-    constexpr bool SHARES_TOUCH_SPI_BUS = true;
+    constexpr bool ENABLED = RGB_V21_MATRIX_ACTIVE;
+    constexpr bool SHARES_TOUCH_SPI_BUS = RGB_V21_MATRIX_ACTIVE;
     constexpr uint32_t CLOCK_HZ = 4000000;
     constexpr bool END_SPI_ON_UNMOUNT = false;
 }
@@ -490,7 +517,7 @@ namespace SDCard {
 
 ### Shared-bus implementation
 
-`SPI_Master` starts one Arduino `SPI` object on GPIO12/11/13. Both `TouchDriver` and `SDCardDriver` use that exact same object.
+`SPI_Master` starts the Arduino `SPI` object on the active profile's touch pins. Under `V21_MATRIX_TEST`, both `TouchDriver` and `SDCardDriver` use that same GPIO12/11/13 bus. Under `LEGACY_WORKING`, the bus uses the original main-branch touch pins instead.
 
 This is deliberate. Arduino-ESP32 core 2.0.17's SD implementation performs its transfers using `SPIClass::beginTransaction()` and `endTransaction()`. The touch driver now does the same, so the two devices use one bus mutex rather than two independent SPI controllers fighting over the same physical wires.
 
