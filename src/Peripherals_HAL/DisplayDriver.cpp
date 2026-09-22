@@ -5,8 +5,9 @@
 #include <driver/ledc.h>
 #include <esp_heap_caps.h>
 
-DisplayDriver::~DisplayDriver() {
+void DisplayDriver::resetFillBuffer() {
     if (!fill_buffer) {
+        fill_buffer_external = false;
         return;
     }
 
@@ -14,9 +15,16 @@ DisplayDriver::~DisplayDriver() {
         const NV3047MemoryProviderV1* provider =
             nv3047_driver_get_memory_provider();
 
-        if (provider && provider->release_dma) {
+        if (provider &&
+            provider->is_ready &&
+            provider->is_ready() &&
+            provider->release_dma) {
             provider->release_dma(fill_buffer);
         }
+
+        // If the provider is no longer ready, it owns the allocation lifecycle
+        // and may already have released this storage. Never free or dereference
+        // the borrowed pointer locally.
     } else {
         heap_caps_free(fill_buffer);
     }
@@ -25,8 +33,17 @@ DisplayDriver::~DisplayDriver() {
     fill_buffer_external = false;
 }
 
+DisplayDriver::~DisplayDriver() {
+    resetFillBuffer();
+}
+
 bool DisplayDriver::init(esp_lcd_panel_handle_t rgb_handle) {
     if (!rgb_handle) return false;
+
+    // A DisplayDriver object may be initialized again after a previous
+    // provider/local allocation session. Drop any old fill-buffer ownership
+    // before binding the new panel handle.
+    resetFillBuffer();
 
     handle = rgb_handle;
     current_brightness = static_cast<uint8_t>(
