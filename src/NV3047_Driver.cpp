@@ -80,6 +80,18 @@ bool NV3047_Driver::getTouch(uint16_t &x, uint16_t &y) {
     return hardware && hardware->getTouch().getTouch(x, y);
 }
 
+bool NV3047_Driver::isSDMounted() const {
+    return hardware && hardware->getSDCard().isMounted();
+}
+
+SDCardDriver* NV3047_Driver::getSDCard() {
+    return hardware ? &hardware->getSDCard() : nullptr;
+}
+
+const SDCardDriver* NV3047_Driver::getSDCard() const {
+    return hardware ? &hardware->getSDCard() : nullptr;
+}
+
 Framebuffer* NV3047_Driver::getCanvas() {
     return hardware ? &hardware->getCanvas() : nullptr;
 }
