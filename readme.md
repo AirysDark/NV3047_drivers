@@ -407,6 +407,48 @@ void setup() {
 
 The SD card is **not automatically mounted by `NV3047::init()`**. This is intentional so the display/touch driver can still start normally with no card inserted. Mount it explicitly with `SDCardDriver::init()` when the application needs storage.
 
+### Runtime safe-removal command
+
+For a future UI/menu command such as **Eject SD Card** or **Prepare SD for removal**, call:
+
+```cpp
+if (sd.prepareForRemoval()) {
+    // UI can now show: SAFE TO REMOVE SD CARD
+}
+```
+
+The driver then reports:
+
+```cpp
+sd.isMounted();       // false
+sd.isSafeToRemove();  // true
+```
+
+Before calling `prepareForRemoval()`, close every application-owned `fs::File`:
+
+```cpp
+fs::File logFile = sd.open("/log.txt", FILE_APPEND);
+
+// ...write data...
+
+logFile.flush();
+logFile.close();
+
+sd.prepareForRemoval();
+```
+
+`prepareForRemoval()` unmounts the SD filesystem and, with the default configuration, shuts down the SD SPI bus. The display, touch, framebuffer and backlight continue running normally.
+
+After physically inserting a card again, call:
+
+```cpp
+sd.init();
+```
+
+to remount it during runtime.
+
+**Important:** the driver cannot forcibly close `fs::File` objects that the application has copied into another scope. Those file handles must be flushed/closed before the eject command for removal to be genuinely safe.
+
 ## Notes for future optimization
 
 The current default design intentionally keeps the ESP-IDF RGB driver's own framebuffer behaviour plus the configured application framebuffer pool because that is the stable Core 2.0.17 configuration.
