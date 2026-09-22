@@ -8,7 +8,7 @@ private:
     esp_lcd_panel_handle_t panel_handle = nullptr;
 
 public:
-    // Aligned back to the baseline profile layout with no parameters
+    // Uses the fixed hardware layout declared in Config.h.
     bool init();
     
     esp_lcd_panel_handle_t getHandle();
