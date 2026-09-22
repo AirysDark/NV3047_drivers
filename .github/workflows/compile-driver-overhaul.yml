@@ -1,0 +1,60 @@
+name: Compile driver_overhaul_v2
+
+on:
+  push:
+    branches:
+      - driver_overhaul_v2
+  pull_request:
+    branches:
+      - driver_overhaul_v2
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout NV3047 drivers
+        uses: actions/checkout@v4
+
+      - name: Checkout NV3047 memory manager
+        uses: actions/checkout@v4
+        with:
+          repository: AirysDark/NV3047_memorymanager
+          ref: main
+          path: external/NV3047_memorymanager
+
+      - name: Install Arduino CLI
+        uses: arduino/setup-arduino-cli@v2
+
+      - name: Configure ESP32 board index
+        run: |
+          arduino-cli config init
+          arduino-cli config add board_manager.additional_urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core update-index
+
+      - name: Install ESP32 Arduino Core 2.0.17
+        run: |
+          arduino-cli core install esp32:esp32@2.0.17
+
+      - name: Compile local driver mode
+        run: |
+          arduino-cli compile \
+            --fqbn esp32:esp32:esp32s3 \
+            --library . \
+            examples/Color-test
+
+      - name: Compile takeover - memory include first
+        run: |
+          arduino-cli compile \
+            --fqbn esp32:esp32:esp32s3 \
+            --library . \
+            --library external/NV3047_memorymanager \
+            .github/sketches/TakeoverOrderA
+
+      - name: Compile takeover - driver include first
+        run: |
+          arduino-cli compile \
+            --fqbn esp32:esp32:esp32s3 \
+            --library . \
+            --library external/NV3047_memorymanager \
+            .github/sketches/TakeoverOrderB
