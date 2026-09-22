@@ -7,7 +7,7 @@ bool SPI_Master::init() {
     buscfg.miso_io_num = Config::PIN_SPI_MISO;
     buscfg.quadwp_io_num = -1;
     buscfg.quadhd_io_num = -1;
-    buscfg.max_transfer_sz = 32;
+    buscfg.max_transfer_sz = Config::SPI::MAX_TRANSFER_SIZE_BYTES;
 
     const esp_err_t result =
         spi_bus_initialize(Config::SPI_HOST_ID, &buscfg, SPI_DMA_CH_AUTO);
@@ -20,9 +20,7 @@ spi_device_handle_t SPI_Master::addDevice(int cs_pin, int clock_speed_hz) {
     devcfg.clock_speed_hz = clock_speed_hz;
     devcfg.mode = 0;
     devcfg.spics_io_num = cs_pin;
-
-    // Touch uses polling transfers, so a single queued transaction is sufficient.
-    devcfg.queue_size = 1;
+    devcfg.queue_size = Config::SPI::DEVICE_QUEUE_SIZE;
 
     // Intentionally leave SPI_DEVICE_NO_DUMMY disabled. The working XPT2046 setup
     // under Arduino-ESP32 2.0.17 relies on the normal turnaround behaviour.
