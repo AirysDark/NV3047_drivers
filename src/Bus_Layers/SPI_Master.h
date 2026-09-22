@@ -1,15 +1,13 @@
 #pragma once
 
 #include "../Config.h"
-#include <driver/spi_master.h>
+#include <SPI.h>
 
 class SPI_Master {
 public:
-    // Initializes the board's shared peripheral SPI bus.
-    // Touch is the active device today; TF/microSD is expected to share the
-    // same SCLK/MOSI/MISO lines once its separate CS pin is confirmed.
+    // Initializes the single shared peripheral SPI bus used by touch + TF.
     static bool init();
 
-    // Adds one SPI device to the already-initialized shared bus.
-    static spi_device_handle_t addDevice(int cs_pin, int clock_speed_hz);
+    // Returns the same Arduino SPI bus instance to every shared-bus peripheral.
+    static SPIClass& bus();
 };
