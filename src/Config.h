@@ -4,7 +4,6 @@
 #include <stdint.h>
 
 #include <driver/gpio.h>
-#include <driver/spi_master.h>
 #include <esp_heap_caps.h>
 
 namespace Config {
@@ -43,19 +42,16 @@ namespace Config {
     // ============================================================
     // SHARED PERIPHERAL SPI BUS + TOUCH PINS
     // ============================================================
-    // PCB silkscreen verified:
+    // PCB silkscreen + Elecrow V2.1 definition:
     // IO12 = TP_CLK, IO11 = TP_DIN, IO13 = TP_OUT,
-    // IO10 = TP_CS,  IO36 = TP_IRQ.
+    // IO0  = TP_CS,  IO36 = TP_IRQ.
     //
-    // The TF/microSD slot is believed to share the SPI clock/data lines.
-    // Its chip-select has NOT yet been identified, so SD mounting stays disabled.
-    constexpr spi_host_device_t SPI_HOST_ID = SPI3_HOST;
-
+    // TF/microSD shares the same clock/data lines with its own CS on IO10.
     constexpr int PIN_SHARED_SPI_SCLK = 12;
     constexpr int PIN_SHARED_SPI_MOSI = 11;
     constexpr int PIN_SHARED_SPI_MISO = 13;
 
-    constexpr int PIN_TOUCH_CS  = 10;
+    constexpr int PIN_TOUCH_CS  = 0;
     constexpr int PIN_TOUCH_IRQ = 36;
 
     // Backward-compatible aliases used by existing bus-layer code.
@@ -66,8 +62,8 @@ namespace Config {
     // ============================================================
     // MICRO-SD (TF) CARD PINS
     // ============================================================
-    // TF shares the SPI data/clock bus with touch. CS is still unknown.
-    constexpr int PIN_SD_CS   = -1;
+    // TF shares the SPI data/clock bus with touch and has an independent CS.
+    constexpr int PIN_SD_CS   = 10;
     constexpr int PIN_SD_CLK  = PIN_SHARED_SPI_SCLK;
     constexpr int PIN_SD_MOSI = PIN_SHARED_SPI_MOSI;
     constexpr int PIN_SD_MISO = PIN_SHARED_SPI_MISO;
@@ -155,12 +151,8 @@ namespace Config {
     // ============================================================
     namespace SPI {
         constexpr int TOUCH_CLOCK_HZ = 1000000;
-        constexpr int MAX_TRANSFER_SIZE_BYTES = 32;
-        constexpr int DEVICE_QUEUE_SIZE = 1;
 
         static_assert(TOUCH_CLOCK_HZ > 0, "Touch SPI clock must be greater than zero");
-        static_assert(MAX_TRANSFER_SIZE_BYTES >= 3, "Touch SPI transfers require at least 3 bytes");
-        static_assert(DEVICE_QUEUE_SIZE >= 1, "SPI device queue size must be at least 1");
     }
 
 
@@ -168,11 +160,10 @@ namespace Config {
     // SD CARD CONFIGURATION
     // ============================================================
     namespace SDCard {
-        // TF is intentionally disabled until its chip-select is confirmed.
-        constexpr bool ENABLED = false;
+        constexpr bool ENABLED = true;
         constexpr bool SHARES_TOUCH_SPI_BUS = true;
 
-        // Conservative default for broad card compatibility once enabled.
+        // Conservative default for broad card compatibility.
         constexpr uint32_t CLOCK_HZ = 4000000;
 
         constexpr const char* MOUNT_POINT = "/sd";
@@ -184,12 +175,10 @@ namespace Config {
 
         static_assert(CLOCK_HZ > 0, "SD card SPI clock must be greater than zero");
         static_assert(MAX_OPEN_FILES > 0, "SD card must allow at least one open file");
+        static_assert(PIN_SD_CS >= 0, "TF chip-select GPIO must be configured");
         static_assert(
-            !ENABLED || PIN_SD_CS >= 0,
-            "Enable SD only after the TF chip-select GPIO has been confirmed");
-        static_assert(
-            !ENABLED || PIN_SD_CS != PIN_TOUCH_CS,
-            "TF chip-select must not reuse the PCB-confirmed touch CS GPIO");
+            PIN_SD_CS != PIN_TOUCH_CS,
+            "TF and touch require independent chip-select GPIOs");
     }
 
     // ============================================================
