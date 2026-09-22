@@ -8,7 +8,9 @@ private:
     esp_lcd_panel_handle_t handle = nullptr;
     uint8_t current_brightness = 0;
     bool is_sleeping = true;
+
     uint16_t* fill_buffer = nullptr;
+    bool fill_buffer_external = false;
 
 public:
     DisplayDriver() = default;
