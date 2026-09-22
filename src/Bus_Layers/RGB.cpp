@@ -6,9 +6,9 @@
 bool RGB::init() {
     esp_lcd_rgb_panel_config_t panel_config = {};
 
-    panel_config.data_width = 16;
-    panel_config.psram_trans_align = 64;
-    panel_config.sram_trans_align = 8;
+    panel_config.data_width = Config::RGB::DATA_WIDTH;
+    panel_config.psram_trans_align = Config::RGB::PSRAM_TRANSFER_ALIGNMENT;
+    panel_config.sram_trans_align = Config::RGB::SRAM_TRANSFER_ALIGNMENT;
     panel_config.clk_src = LCD_CLK_SRC_PLL160M;
     panel_config.disp_gpio_num = -1;
     panel_config.pclk_gpio_num = Config::PIN_RGB_PCLK;
@@ -17,9 +17,8 @@ bool RGB::init() {
     panel_config.de_gpio_num = Config::PIN_RGB_DE;
 
     // VERIFIED WORKING CROWPANEL BUS BANK ROUTING.
-    // Do not relabel/reorder these GPIO assignments just to match textbook RGB565.
-    // The software colour constants intentionally compensate for how this panel's
-    // physical 5/6/5 banks behave.
+    // The non-standard colour constants in Config.h intentionally compensate
+    // for the physical bank behaviour. Keep GPIO routing and colour packing together.
     panel_config.data_gpio_nums[0] = Config::PIN_RGB_B0;
     panel_config.data_gpio_nums[1] = Config::PIN_RGB_B1;
     panel_config.data_gpio_nums[2] = Config::PIN_RGB_B2;
@@ -42,7 +41,6 @@ bool RGB::init() {
     panel_config.timings.pclk_hz = Config::PCLK_FREQ_HZ;
     panel_config.timings.h_res = Config::SCREEN_WIDTH;
     panel_config.timings.v_res = Config::SCREEN_HEIGHT;
-
     panel_config.timings.hsync_back_porch = Config::HSYNC_BACK_PORCH;
     panel_config.timings.hsync_front_porch = Config::HSYNC_FRONT_PORCH;
     panel_config.timings.hsync_pulse_width = Config::HSYNC_PULSE_WIDTH;
@@ -50,14 +48,13 @@ bool RGB::init() {
     panel_config.timings.vsync_front_porch = Config::VSYNC_FRONT_PORCH;
     panel_config.timings.vsync_pulse_width = Config::VSYNC_PULSE_WIDTH;
 
-    // Verified stable electrical properties for this board.
-    panel_config.timings.flags.pclk_active_neg = 1;
-    panel_config.timings.flags.hsync_idle_low = 0;
-    panel_config.timings.flags.vsync_idle_low = 0;
-    panel_config.timings.flags.de_idle_high = 0;
-    panel_config.timings.flags.pclk_idle_high = 0;
+    panel_config.timings.flags.pclk_active_neg = Config::RGB::PCLK_ACTIVE_NEG;
+    panel_config.timings.flags.hsync_idle_low = Config::RGB::HSYNC_IDLE_LOW;
+    panel_config.timings.flags.vsync_idle_low = Config::RGB::VSYNC_IDLE_LOW;
+    panel_config.timings.flags.de_idle_high = Config::RGB::DE_IDLE_HIGH;
+    panel_config.timings.flags.pclk_idle_high = Config::RGB::PCLK_IDLE_HIGH;
 
-    panel_config.flags.fb_in_psram = 1;
+    panel_config.flags.fb_in_psram = Config::RGB::FRAMEBUFFER_IN_PSRAM;
 
     const esp_err_t result =
         esp_lcd_new_rgb_panel(&panel_config, &panel_handle);
