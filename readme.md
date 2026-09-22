@@ -151,7 +151,7 @@ Recommended board settings:
 - **Flash Mode:** QIO
 - **PSRAM:** QSPI PSRAM
 
-PSRAM is required for the two full-size application framebuffers.
+With the default configuration, PSRAM is required for the full-size application framebuffer pool.
 
 ## RGB timing
 
