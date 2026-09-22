@@ -5,8 +5,6 @@
 
 class DisplayDriver {
 private:
-    static constexpr int FILL_BUFFER_LINES = 10;
-
     esp_lcd_panel_handle_t handle = nullptr;
     uint8_t current_brightness = 0;
     bool is_sleeping = true;
