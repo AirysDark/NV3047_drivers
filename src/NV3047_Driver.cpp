@@ -11,6 +11,14 @@ bool NV3047_Driver::begin(NV3047* hw_instance) {
     return true;
 }
 
+bool NV3047_Driver::isExternalMemoryManagerActive() const {
+    return
+        hardware &&
+        hardware->getCanvas().
+            getMemoryManager().
+            isExternalProviderActive();
+}
+
 void NV3047_Driver::setBrightness(uint8_t percentage) {
     if (hardware) {
         hardware->getDisplay().setBrightness(percentage);
