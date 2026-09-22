@@ -2,14 +2,7 @@
 
 bool NV3047::init() {
     if (!spiMaster.init()) return false;
-
-    spi_device_handle_t touch_handle =
-        spiMaster.addDevice(
-            Config::PIN_TOUCH_CS,
-            Config::SPI::TOUCH_CLOCK_HZ);
-
-    if (!touch_handle) return false;
-    if (!touch.init(touch_handle)) return false;
+    if (!touch.init(spiMaster.bus())) return false;
 
     if (!rgbBus.init()) return false;
     if (!display.init(rgbBus.getHandle())) return false;
