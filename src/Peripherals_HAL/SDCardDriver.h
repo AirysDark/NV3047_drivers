@@ -11,12 +11,18 @@ public:
     SDCardDriver() = default;
     ~SDCardDriver();
 
+    // TF support is intentionally disabled until the board's TF chip-select
+    // is confirmed. The PCB-verified shared bus is CLK=12, MOSI=11, MISO=13.
     bool init();
     void end();
 
-    // Runtime-safe eject command.
+    // Runtime-safe eject command for the completed TF backend.
     // Close all application-owned fs::File handles before calling this.
     bool prepareForRemoval();
+
+    bool isConfigured() const {
+        return Config::SDCard::ENABLED && Config::PIN_SD_CS >= 0;
+    }
 
     bool isMounted() const { return mounted; }
     bool isSafeToRemove() const { return safe_to_remove; }
