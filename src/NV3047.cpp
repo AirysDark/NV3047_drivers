@@ -1,25 +1,15 @@
 #include "NV3047.h"
 
 bool NV3047::init() {
-    // Bring up the selected hardware profile's touch SPI wiring first.
-    // LEGACY_WORKING preserves main's GPIO20/19 + GPIO18 CS map.
-    // V21_MATRIX_TEST uses GPIO12/11/13 + GPIO0 CS and also de-asserts SD CS.
+    // Bring up the fixed dedicated XPT2046 touch transport.
     if (!spiMaster.init()) return false;
-
-    if (Config::RGB_V21_MATRIX_ACTIVE) {
-        if (!touch.init(spiMaster.bus())) return false;
-    } else {
-        if (!touch.init(spiMaster.legacyTouchDevice())) return false;
-    }
+    if (!touch.init(spiMaster.touchDevice())) return false;
 
     if (!rgbBus.init()) return false;
     if (!display.init(rgbBus.getHandle())) return false;
     if (!fb.init(rgbBus.getHandle())) return false;
 
-    // V21_MATRIX_TEST represents the complete V2.1 peripheral profile.
-    // Try to mount TF automatically, but do not make LCD/touch startup depend
-    // on a card being physically inserted.
-    if (Config::SDCard::AUTO_MOUNT_WITH_ACTIVE_PROFILE &&
+    if (Config::SDCard::AUTO_MOUNT &&
         sdCard.isConfigured()) {
         sdCard.init();
     }
