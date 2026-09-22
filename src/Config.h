@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <driver/gpio.h>
 #include <driver/spi_master.h>
+#include <esp_heap_caps.h>
 
 namespace Config {
     constexpr uint16_t SCREEN_WIDTH = 480;
@@ -72,10 +73,42 @@ namespace Config {
     constexpr uint16_t COLOR_LIGHT_GREY  = 0xF7DE;
     constexpr uint16_t COLOR_SIDE_WHITE  = 0xFA3F;
 
-    namespace Framebuffer {
-        constexpr size_t NUM_BUFFERS = 2;
+    // ============================================================
+    // MEMORY MANAGER CONFIGURATION
+    // ============================================================
+    // Change framebuffer memory behaviour here only. MemoryManager.h/.cpp
+    // consume these settings and should not need editing for normal tuning.
+    namespace MemoryManager {
+        // Minimum supported value is 2. Values above 2 create a rotating
+        // framebuffer pool without requiring changes to MemoryManager.cpp.
+        constexpr size_t BUFFER_COUNT = 2;
+
+        // One full 480x272 RGB565 frame by default.
         constexpr size_t BUFFER_SIZE_BYTES =
-            static_cast<size_t>(SCREEN_WIDTH) * SCREEN_HEIGHT * sizeof(uint16_t);
+            static_cast<size_t>(SCREEN_WIDTH) *
+            static_cast<size_t>(SCREEN_HEIGHT) *
+            sizeof(uint16_t);
+
+        // Keep buffers aligned for efficient 32-bit writes and RGB/PSRAM access.
+        constexpr size_t BUFFER_ALIGNMENT = 64;
+
+        // Allocation target. Default is external PSRAM with byte access.
+        // This can be changed here if a future memory layout requires it.
+        constexpr uint32_t ALLOCATION_CAPS =
+            MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT;
+
+        // Capability bucket used by the diagnostic free/largest-block queries.
+        constexpr uint32_t DIAGNOSTIC_CAPS = MALLOC_CAP_SPIRAM;
+
+        // Clear every allocated framebuffer to black during init.
+        constexpr bool ZERO_BUFFERS_ON_INIT = true;
+
+        // Keep compile-time protection close to the setting being changed.
+        static_assert(BUFFER_COUNT >= 2, "NV3047 MemoryManager requires at least 2 framebuffers");
+        static_assert(BUFFER_ALIGNMENT >= 4, "Framebuffer alignment must be at least 4 bytes");
+    }
+
+    namespace Framebuffer {
         constexpr bool USE_32BIT_CLEAR = true;
 
         // The theoretical scan period is useful for diagnostics. The default presentation
