@@ -9,6 +9,10 @@ bool SDCardDriver::init() {
         return true;
     }
 
+    // A new mount attempt means the card must not be considered eject-ready
+    // until the mount either succeeds or is fully torn back down.
+    safe_to_remove = false;
+
     // Arduino-ESP32 core 2.0.17:
     // On ESP32-S3, the global SPI object uses FSPI.
     // The current touch driver uses SPI3_HOST separately, so this SD bus
@@ -35,24 +39,40 @@ bool SDCardDriver::init() {
         }
 
         mounted = false;
+        safe_to_remove = true;
         return false;
     }
 
     mounted = true;
+    safe_to_remove = false;
     return true;
 }
 
 void SDCardDriver::end() {
+    prepareForRemoval();
+}
+
+bool SDCardDriver::prepareForRemoval() {
+    // If the card is already unmounted, there is nothing left for this driver
+    // to flush/unmount and physical removal is already safe from its perspective.
     if (!mounted) {
-        return;
+        safe_to_remove = true;
+        return true;
     }
 
+    // IMPORTANT:
+    // Any fs::File handles owned by application code must be closed before this call.
+    // The driver cannot forcibly close File objects that have been copied out to
+    // another scope. SD.end() unmounts the filesystem once application file I/O has ended.
     SD.end();
     mounted = false;
 
     if (Config::SDCard::END_SPI_ON_UNMOUNT) {
         SPI.end();
     }
+
+    safe_to_remove = true;
+    return true;
 }
 
 sdcard_type_t SDCardDriver::cardType() const {
