@@ -80,16 +80,34 @@ NV3047_drivers/
 
 ### MemoryManager
 
-`MemoryManager` owns the two 64-byte-aligned PSRAM framebuffers.
+`MemoryManager` owns the framebuffer pool, but **all normal memory tuning is controlled from `Config.h`**. The implementation contains no fixed buffer count, alignment, allocation capability, or clear-on-init setting.
 
-At 480 x 272 RGB565:
+The central configuration block is:
+
+```cpp
+namespace Config::MemoryManager {
+    constexpr size_t BUFFER_COUNT = 2;
+    constexpr size_t BUFFER_SIZE_BYTES =
+        static_cast<size_t>(SCREEN_WIDTH) * SCREEN_HEIGHT * sizeof(uint16_t);
+    constexpr size_t BUFFER_ALIGNMENT = 64;
+    constexpr uint32_t ALLOCATION_CAPS =
+        MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT;
+    constexpr uint32_t DIAGNOSTIC_CAPS = MALLOC_CAP_SPIRAM;
+    constexpr bool ZERO_BUFFERS_ON_INIT = true;
+}
+```
+
+Change those values in `Config.h`; `MemoryManager.h/.cpp` should not need editing for normal memory-layout changes. `BUFFER_COUNT` supports 2 or more buffers and the manager rotates through the configured pool automatically.
+
+At the default 480 x 272 RGB565 configuration:
 
 ```text
 One framebuffer:  261,120 bytes
-Two framebuffers: 522,240 bytes
+Buffer count:     2
+Total allocation: 522,240 bytes
 ```
 
-It exposes diagnostic information for buffer size, total framebuffer allocation, free PSRAM, and the largest free PSRAM block.
+It exposes diagnostic information for configured buffer count, buffer size, total framebuffer allocation, free managed-memory capability space, and the largest free block.
 
 ### Framebuffer
 
@@ -185,6 +203,7 @@ void loop() {
 Framebuffer& canvas = hardware.getCanvas();
 MemoryManager& memory = canvas.getMemoryManager();
 
+Serial.println(memory.getBufferCount());
 Serial.println(memory.getBufferSizeBytes());
 Serial.println(memory.getTotalAllocatedBytes());
 Serial.println(memory.getFreePsramBytes());
@@ -212,7 +231,7 @@ See `examples/Touch-test/touch-test.ino`.
 
 ## Notes for future optimization
 
-The current design intentionally keeps the ESP-IDF RGB driver's own framebuffer behaviour plus the two application render buffers because that is the stable Core 2.0.17 configuration.
+The current default design intentionally keeps the ESP-IDF RGB driver's own framebuffer behaviour plus the configured application framebuffer pool because that is the stable Core 2.0.17 configuration.
 
 A future experimental branch can investigate:
 
