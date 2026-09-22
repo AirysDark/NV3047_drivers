@@ -40,6 +40,10 @@ bool MemoryManager::init() {
         // Never silently fall back to the local allocator after a takeover
         // failure because that would create competing memory owners.
         if (!started || !provider->is_ready()) {
+            // A registered provider owns the policy. Ensure any partial
+            // provider-side startup state is cleaned up, then fail rather than
+            // creating local framebuffers as a fallback.
+            provider->end();
             return false;
         }
 
