@@ -250,6 +250,111 @@ For calibration work, `TouchDriver::getRawTouch()` exposes the verified raw XPT2
 
 See `examples/Touch-test/touch-test.ino`.
 
+## Alternative / reference DIS06043H pin map
+
+The following pinout has been collected as an **alternative/reference DIS06043H mapping**. It is retained for hardware comparison and future board-revision investigation.
+
+**Important:** this is **not** the active pin map used by `driver_overhaul_v2`. The current working RGB/touch configuration in `Config.h` remains authoritative and should not be replaced with this reference map without testing the actual panel.
+
+### Reference microSD / TF slot
+
+```cpp
+#define SD_CS   10
+#define SD_CLK  12
+#define SD_MOSI 11
+#define SD_MISO 13
+#define SD_IRQ  36
+```
+
+The SPI SD pins `CS=10`, `CLK=12`, `MOSI=11`, and `MISO=13` are the values currently used by `SDCardDriver`. The reported `SD_IRQ=36` value is **not used**, because GPIO36 is retained by the working driver as the touch interrupt input.
+
+### Reference LCD mapping
+
+```cpp
+#define LCD_PCLK      9
+#define LCD_DE        4
+#define LCD_VSYNC     3
+#define LCD_HSYNC     46
+#define LCD_BACKLIGHT 2
+
+#define LCD_R0 45
+#define LCD_R1 42
+#define LCD_R2 41
+#define LCD_R3 40
+#define LCD_R4 39
+
+#define LCD_G0 0
+#define LCD_G1 48
+#define LCD_G2 47
+#define LCD_G3 21
+#define LCD_G4 14
+#define LCD_G5 38
+
+#define LCD_B0 5
+#define LCD_B1 6
+#define LCD_B2 7
+#define LCD_B3 15
+#define LCD_B4 16
+```
+
+### Reference resistive-touch mapping
+
+```cpp
+#define TOUCH_CLK  1
+#define TOUCH_DIN  11
+#define TOUCH_DOUT 13
+#define TOUCH_CS   38
+```
+
+### Why this reference is interesting
+
+There is a strong structural overlap between this reference map and the current working map.
+
+```text
+REFERENCE BLUE:   5, 6, 7, 15, 16
+WORKING BLUE:    15, 7, 6, 5, 4
+```
+
+Four of the five blue GPIOs are shared.
+
+The reference red bank is:
+
+```text
+45, 42, 41, 40, 39
+```
+
+Those correspond in the working map to:
+
+```text
+45 = R4
+42 = PCLK
+41 = VSYNC
+40 = DE
+39 = HSYNC
+```
+
+The reference green bank also reuses much of the working red bank:
+
+```text
+REFERENCE GREEN: 0, 48, 47, 21, 14, 38
+WORKING RED:     14, 21, 47, 48, 45
+```
+
+And the reference timing pins:
+
+```text
+PCLK  = 9
+HSYNC = 46
+VSYNC = 3
+DE    = 4
+```
+
+are GPIOs that currently sit inside the working green/blue data banks.
+
+This overlap is documented because it may indicate a different PCB revision, a differently-labelled vendor pin map, or a systematic signal-group remapping. It may also help explain why this project requires its unusual panel colour-bank compensation.
+
+Until the alternative mapping is verified on the actual hardware, **do not replace the working RGB/touch map in `Config.h` with it**.
+
 ## MicroSD support
 
 The DIS06043H microSD slot is supported through the dedicated `SDCardDriver` HAL using the Arduino-ESP32 **2.0.17** SPI SD library.
