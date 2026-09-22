@@ -78,11 +78,13 @@ namespace Config {
 
         static_assert(DATA_WIDTH == 16, "This NV3047 driver build is fixed to a 16-bit RGB bus");
         static_assert(
+            PSRAM_TRANSFER_ALIGNMENT > 0 &&
             (PSRAM_TRANSFER_ALIGNMENT & (PSRAM_TRANSFER_ALIGNMENT - 1U)) == 0U,
-            "RGB PSRAM transfer alignment must be a power of two");
+            "RGB PSRAM transfer alignment must be a nonzero power of two");
         static_assert(
+            SRAM_TRANSFER_ALIGNMENT > 0 &&
             (SRAM_TRANSFER_ALIGNMENT & (SRAM_TRANSFER_ALIGNMENT - 1U)) == 0U,
-            "RGB SRAM transfer alignment must be a power of two");
+            "RGB SRAM transfer alignment must be a nonzero power of two");
     }
 
     // ============================================================
@@ -152,6 +154,7 @@ namespace Config {
         constexpr size_t FILL_BUFFER_LINES = 10;
 
         static_assert(DEFAULT_BRIGHTNESS_PERCENT <= 100, "Default brightness must be 0-100");
+        static_assert(BACKLIGHT_PWM_HZ > 0, "Backlight PWM frequency must be greater than zero");
         static_assert(FILL_BUFFER_LINES > 0, "Display fill buffer must contain at least one line");
         static_assert(
             FILL_BUFFER_LINES <= SCREEN_HEIGHT,
@@ -191,6 +194,9 @@ namespace Config {
         static_assert(
             (BUFFER_SIZE_BYTES % sizeof(uint16_t)) == 0,
             "Framebuffer size must contain whole RGB565 pixels");
+        static_assert(
+            (BUFFER_SIZE_BYTES % BUFFER_ALIGNMENT) == 0,
+            "Framebuffer size must be a multiple of its configured alignment");
     }
 
     // ============================================================
