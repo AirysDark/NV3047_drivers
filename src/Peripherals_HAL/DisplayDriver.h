@@ -12,6 +12,8 @@ private:
     uint16_t* fill_buffer = nullptr;
     bool fill_buffer_external = false;
 
+    void resetFillBuffer();
+
 public:
     DisplayDriver() = default;
     ~DisplayDriver();
