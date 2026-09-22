@@ -31,6 +31,11 @@ void setup() {
     myScreen.setBrightness(80);
     myScreen.fillScreen(Config::COLOR_BLACK);
 
+    if (Config::RGB_V21_MATRIX_ACTIVE) {
+        Serial.print("V2.1 TF auto-mount: ");
+        Serial.println(myScreen.isSDMounted() ? "MOUNTED" : "NO CARD / MOUNT FAILED");
+    }
+
     Serial.println("Hardware init complete. Touch screen to cycle colors.");
 }
 
