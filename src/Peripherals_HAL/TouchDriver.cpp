@@ -22,78 +22,37 @@ uint16_t medianSamples(uint16_t* values, size_t count) {
 
 } // namespace
 
-bool TouchDriver::init(SPIClass& bus) {
-    legacy_spi_handle = nullptr;
-    spi_bus = &bus;
-    was_pressed_last_frame = false;
-    is_pressed_current_frame = false;
-
-    pinMode(Config::PIN_TOUCH_CS, OUTPUT);
-    digitalWrite(Config::PIN_TOUCH_CS, HIGH);
-
-    pinMode(Config::PIN_TOUCH_IRQ, INPUT_PULLUP);
-
-    return spi_bus->bus() != nullptr;
-}
-
 bool TouchDriver::init(spi_device_handle_t handle) {
-    spi_bus = nullptr;
-    legacy_spi_handle = handle;
+    spi_handle = handle;
     was_pressed_last_frame = false;
     is_pressed_current_frame = false;
 
     pinMode(Config::PIN_TOUCH_IRQ, INPUT_PULLUP);
 
-    return legacy_spi_handle != nullptr;
-}
-
-bool TouchDriver::transportReady() const {
-    if (legacy_spi_handle) {
-        return true;
-    }
-
-    return spi_bus && spi_bus->bus();
+    return spi_handle != nullptr;
 }
 
 bool TouchDriver::transfer16(uint8_t cmd, uint16_t &value) {
     value = 0;
 
+    if (!spi_handle) {
+        return false;
+    }
+
     uint8_t tx_data[3] = {cmd, 0x00, 0x00};
     uint8_t rx_data[3] = {0, 0, 0};
 
-    if (legacy_spi_handle) {
-        spi_transaction_t transaction = {};
-        transaction.length = 24;
-        transaction.tx_buffer = tx_data;
-        transaction.rx_buffer = rx_data;
+    spi_transaction_t transaction = {};
+    transaction.length = 24;
+    transaction.tx_buffer = tx_data;
+    transaction.rx_buffer = rx_data;
 
-        if (spi_device_polling_transmit(
-                legacy_spi_handle,
-                &transaction) != ESP_OK) {
-            return false;
-        }
-    } else {
-        if (!spi_bus || !spi_bus->bus()) {
-            return false;
-        }
-
-        spi_bus->beginTransaction(
-            SPISettings(
-                Config::SPI::TOUCH_CLOCK_HZ,
-                MSBFIRST,
-                SPI_MODE0));
-
-        digitalWrite(Config::PIN_TOUCH_CS, LOW);
-        spi_bus->transferBytes(
-            tx_data,
-            rx_data,
-            sizeof(tx_data));
-        digitalWrite(Config::PIN_TOUCH_CS, HIGH);
-
-        spi_bus->endTransaction();
+    if (spi_device_polling_transmit(
+            spi_handle,
+            &transaction) != ESP_OK) {
+        return false;
     }
 
-    // Preserve the byte alignment validated by the final working main driver.
     const uint16_t high_byte =
         static_cast<uint16_t>(rx_data[0]) << 8;
     const uint16_t low_byte =
@@ -106,7 +65,7 @@ bool TouchDriver::transfer16(uint8_t cmd, uint16_t &value) {
 }
 
 bool TouchDriver::readRawPair(uint16_t &raw_x, uint16_t &raw_y) {
-    if (!transportReady() || !isPressed()) return false;
+    if (!spi_handle || !isPressed()) return false;
 
     if (!transfer16(Config::Touch::X_COMMAND, raw_x)) {
         return false;
