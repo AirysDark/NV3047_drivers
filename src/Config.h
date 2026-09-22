@@ -187,6 +187,9 @@ namespace Config {
         static_assert(
             !ENABLED || PIN_SD_CS >= 0,
             "Enable SD only after the TF chip-select GPIO has been confirmed");
+        static_assert(
+            !ENABLED || PIN_SD_CS != PIN_TOUCH_CS,
+            "TF chip-select must not reuse the PCB-confirmed touch CS GPIO");
     }
 
     // ============================================================
