@@ -49,6 +49,8 @@ struct NV3047MemoryProviderV1 {
 
 static constexpr uint32_t NV3047_MEMORY_PROVIDER_ABI_VERSION = 1;
 
+#define NV3047_DRIVER_MEMORY_PROVIDER_API_DECLARED 1
+
 #ifdef __cplusplus
 extern "C" {
 #endif
