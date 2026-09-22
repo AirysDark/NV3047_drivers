@@ -28,6 +28,10 @@ public:
 
     bool getTouch(uint16_t &x, uint16_t &y);
 
+    bool isSDMounted() const;
+    SDCardDriver* getSDCard();
+    const SDCardDriver* getSDCard() const;
+
     Framebuffer* getCanvas();
     const Framebuffer* getCanvas() const;
 };
