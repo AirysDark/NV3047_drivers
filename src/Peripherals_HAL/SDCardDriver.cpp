@@ -9,14 +9,24 @@ bool SDCardDriver::init() {
         return true;
     }
 
-    // A new mount attempt means the card must not be considered eject-ready
-    // until the mount either succeeds or is fully torn back down.
+    // Do not guess the TF chip-select. GPIO10 is PCB-confirmed TP_CS.
+    if (!isConfigured()) {
+        safe_to_remove = true;
+        return false;
+    }
+
+    // The board is expected to share CLK/MOSI/MISO between touch and TF.
+    // The current Arduino SD backend creates its own SPI ownership, so it is
+    // deliberately blocked for the shared-bus configuration. Once TF_CS is
+    // identified, this backend should be completed using the already-owned
+    // Config::SPI_HOST_ID bus rather than starting a competing SPI controller.
+    if (Config::SDCard::SHARES_TOUCH_SPI_BUS) {
+        safe_to_remove = true;
+        return false;
+    }
+
     safe_to_remove = false;
 
-    // Arduino-ESP32 core 2.0.17:
-    // On ESP32-S3, the global SPI object uses FSPI.
-    // The current touch driver uses SPI3_HOST separately, so this SD bus
-    // does not reuse or disturb the touch controller bus.
     SPI.begin(
         Config::PIN_SD_CLK,
         Config::PIN_SD_MISO,
@@ -53,20 +63,19 @@ void SDCardDriver::end() {
 }
 
 bool SDCardDriver::prepareForRemoval() {
-    // If the card is already unmounted, there is nothing left for this driver
-    // to flush/unmount and physical removal is already safe from its perspective.
     if (!mounted) {
         safe_to_remove = true;
         return true;
     }
 
-    // IMPORTANT:
-    // Any fs::File handles owned by application code must be closed before this call.
-    // The driver cannot forcibly close File objects that have been copied out to
-    // another scope. SD.end() unmounts the filesystem once application file I/O has ended.
+    // Any fs::File handles owned by application code must be flushed and
+    // closed before this call. This driver cannot forcibly close copies of
+    // File objects held elsewhere.
     SD.end();
     mounted = false;
 
+    // On the real board the TF bus is expected to be shared with touch, so
+    // Config.h defaults this to false. Never shut down a shared bus on eject.
     if (Config::SDCard::END_SPI_ON_UNMOUNT) {
         SPI.end();
     }
