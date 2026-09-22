@@ -1,62 +1,72 @@
 #include <NV3047_Driver.h>
 
-
+NV3047 hardware;
 NV3047_Driver myScreen;
 
 void setup() {
     Serial.begin(115200);
-    // Give the hardware a moment to stabilize after power-on
     delay(1000);
-    Serial.println("Initializing Bare-Metal Hardware...");
-    
-    // Boot the hardware
-    myScreen.begin();
-    
-    // Initial state: BLACK (using Config namespace)
+
+    Serial.println("Initializing NV3047 hardware...");
+
+    if (!myScreen.begin(&hardware)) {
+        Serial.println("NV3047 initialization FAILED.");
+        while (true) {
+            delay(1000);
+        }
+    }
+
+    myScreen.setBrightness(80);
     myScreen.fillScreen(Config::COLOR_BLACK);
-    myScreen.setBrightness(128); 
-    
-    Serial.println("Hardware Init Complete. Touch screen to cycle colors.");
+
+    Serial.println("Hardware init complete. Touch screen to cycle colors.");
 }
 
 void loop() {
-    static int colorState = 0; // 0:Black, 1:Red, 2:Green, 3:Blue, 4:White
-    uint16_t touchX, touchY;
-    
-    if (myScreen.getTouch(touchX, touchY)) {
-        Serial.print("Touch detected! X: ");
+    static int colorState = 0;
+    static bool touchLatched = false;
+
+    uint16_t touchX = 0;
+    uint16_t touchY = 0;
+    const bool touched = myScreen.getTouch(touchX, touchY);
+
+    if (touched && !touchLatched) {
+        touchLatched = true;
+
+        Serial.print("Touch X: ");
         Serial.print(touchX);
         Serial.print(" Y: ");
         Serial.println(touchY);
-        
-        colorState = (colorState + 1) % 5; 
-        
-        switch(colorState) {
-            case 0: 
+
+        colorState = (colorState + 1) % 5;
+
+        switch (colorState) {
+            case 0:
                 myScreen.fillScreen(Config::COLOR_BLACK);
                 Serial.println("Displaying: BLACK");
                 break;
-            case 1: 
+            case 1:
                 myScreen.fillScreen(Config::COLOR_RED);
                 Serial.println("Displaying: RED");
                 break;
-            case 2: 
+            case 2:
                 myScreen.fillScreen(Config::COLOR_GREEN);
                 Serial.println("Displaying: GREEN");
                 break;
-            case 3: 
+            case 3:
                 myScreen.fillScreen(Config::COLOR_BLUE);
                 Serial.println("Displaying: BLUE");
                 break;
-            case 4: 
+            default:
                 myScreen.fillScreen(Config::COLOR_WHITE);
                 Serial.println("Displaying: WHITE");
                 break;
         }
-        
-        // Debounce to prevent rapid cycling
-        delay(500); 
     }
-    
-    delay(20);
+
+    if (!touched) {
+        touchLatched = false;
+    }
+
+    delay(5);
 }
