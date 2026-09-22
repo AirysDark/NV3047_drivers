@@ -122,6 +122,19 @@ void DisplayDriver::drawBitmap(
 void DisplayDriver::fillScreen(uint16_t color) {
     if (!handle) return;
 
+    if (fill_buffer && fill_buffer_external) {
+        const NV3047MemoryProviderV1* provider =
+            nv3047_driver_get_memory_provider();
+
+        if (!provider || !provider->is_ready()) {
+            // The external owner has already released its allocations.
+            // Drop the borrowed pointer immediately rather than touching it.
+            fill_buffer = nullptr;
+            fill_buffer_external = false;
+            return;
+        }
+    }
+
     const size_t pixel_count =
         static_cast<size_t>(Config::SCREEN_WIDTH) *
         Config::Display::FILL_BUFFER_LINES;
