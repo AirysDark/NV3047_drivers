@@ -3,6 +3,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "../Config.h"
+
 class MemoryManager {
 public:
     MemoryManager();
@@ -17,6 +19,7 @@ public:
     uint16_t* getDrawBuffer() const;
     void swapBuffers();
 
+    size_t getBufferCount() const;
     size_t getBufferSizeBytes() const;
     size_t getTotalAllocatedBytes() const;
     size_t getFreePsramBytes() const;
@@ -26,8 +29,7 @@ public:
     MemoryManager& operator=(const MemoryManager&) = delete;
 
 private:
-    uint16_t* buffer_a;
-    uint16_t* buffer_b;
-    uint16_t* front_buffer;
-    uint16_t* draw_buffer;
+    uint16_t* buffers[Config::MemoryManager::BUFFER_COUNT];
+    size_t front_index;
+    size_t draw_index;
 };
