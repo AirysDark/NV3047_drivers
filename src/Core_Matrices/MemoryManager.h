@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #include "../Config.h"
+#include "ExternalMemoryProvider.h"
 
 class MemoryManager {
 public:
@@ -14,6 +15,9 @@ public:
     void release();
 
     bool isReady() const;
+    bool isExternalProviderActive() const {
+        return ready && external_provider != nullptr;
+    }
 
     uint16_t* getFrontBuffer() const;
     uint16_t* getDrawBuffer() const;
@@ -39,4 +43,6 @@ private:
     size_t front_index;
     size_t draw_index;
     bool ready;
+
+    const NV3047MemoryProviderV1* external_provider;
 };
