@@ -1,13 +1,28 @@
 #include "DisplayDriver.h"
 
+#include "../Core_Matrices/ExternalMemoryProvider.h"
+
 #include <driver/ledc.h>
 #include <esp_heap_caps.h>
 
 DisplayDriver::~DisplayDriver() {
-    if (fill_buffer) {
-        heap_caps_free(fill_buffer);
-        fill_buffer = nullptr;
+    if (!fill_buffer) {
+        return;
     }
+
+    if (fill_buffer_external) {
+        const NV3047MemoryProviderV1* provider =
+            nv3047_driver_get_memory_provider();
+
+        if (provider && provider->release_dma) {
+            provider->release_dma(fill_buffer);
+        }
+    } else {
+        heap_caps_free(fill_buffer);
+    }
+
+    fill_buffer = nullptr;
+    fill_buffer_external = false;
 }
 
 bool DisplayDriver::init(esp_lcd_panel_handle_t rgb_handle) {
@@ -111,11 +126,35 @@ void DisplayDriver::fillScreen(uint16_t color) {
         static_cast<size_t>(Config::SCREEN_WIDTH) *
         Config::Display::FILL_BUFFER_LINES;
 
+    const size_t buffer_bytes =
+        pixel_count * sizeof(uint16_t);
+
     if (!fill_buffer) {
-        fill_buffer = static_cast<uint16_t*>(
-            heap_caps_malloc(
-                pixel_count * sizeof(uint16_t),
-                MALLOC_CAP_DMA));
+        const NV3047MemoryProviderV1* provider =
+            nv3047_driver_get_memory_provider();
+
+        if (provider) {
+            // Registered provider means full takeover: never create a second
+            // unmanaged DMA owner if the external manager cannot supply it.
+            if (!provider->is_ready()) {
+                return;
+            }
+
+            fill_buffer = static_cast<uint16_t*>(
+                provider->acquire_dma(
+                    buffer_bytes,
+                    4));
+
+            fill_buffer_external =
+                fill_buffer != nullptr;
+        } else {
+            fill_buffer = static_cast<uint16_t*>(
+                heap_caps_malloc(
+                    buffer_bytes,
+                    MALLOC_CAP_DMA));
+
+            fill_buffer_external = false;
+        }
 
         if (!fill_buffer) return;
     }
