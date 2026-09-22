@@ -4,23 +4,21 @@
 
 namespace {
 
-uint16_t median3(uint16_t a, uint16_t b, uint16_t c) {
-    if (a > b) {
-        uint16_t t = a;
-        a = b;
-        b = t;
+uint16_t medianSamples(uint16_t* values, size_t count) {
+    // Small insertion sort: predictable and cheap for the configured 3-9 samples.
+    for (size_t i = 1; i < count; ++i) {
+        const uint16_t key = values[i];
+        size_t j = i;
+
+        while (j > 0 && values[j - 1] > key) {
+            values[j] = values[j - 1];
+            --j;
+        }
+
+        values[j] = key;
     }
-    if (b > c) {
-        uint16_t t = b;
-        b = c;
-        c = t;
-    }
-    if (a > b) {
-        uint16_t t = a;
-        a = b;
-        b = t;
-    }
-    return b;
+
+    return values[count / 2U];
 }
 
 } // namespace
@@ -40,8 +38,10 @@ bool TouchDriver::init(spi_device_handle_t handle) {
     return gpio_config(&io_conf) == ESP_OK;
 }
 
-uint16_t TouchDriver::transfer16(uint8_t cmd) {
-    if (!spi_handle) return 0;
+bool TouchDriver::transfer16(uint8_t cmd, uint16_t &value) {
+    value = 0;
+
+    if (!spi_handle) return false;
 
     uint8_t tx_data[3] = {cmd, 0x00, 0x00};
     uint8_t rx_data[3] = {0, 0, 0};
@@ -52,28 +52,34 @@ uint16_t TouchDriver::transfer16(uint8_t cmd) {
     transaction.rx_buffer = rx_data;
 
     if (spi_device_polling_transmit(spi_handle, &transaction) != ESP_OK) {
-        return 0;
+        return false;
     }
 
-    // This byte alignment is intentionally retained because it is the verified
-    // working layout for this panel under Arduino-ESP32 core 2.0.17.
+    // Retain the verified working byte alignment for Arduino-ESP32 core 2.0.17.
     const uint16_t high_byte = static_cast<uint16_t>(rx_data[0]) << 8;
     const uint16_t low_byte = static_cast<uint16_t>(rx_data[1]);
-    return static_cast<uint16_t>((high_byte | low_byte) >> 3);
+
+    value = static_cast<uint16_t>((high_byte | low_byte) >> 3);
+    return true;
 }
 
 bool TouchDriver::readRawPair(uint16_t &raw_x, uint16_t &raw_y) {
     if (!spi_handle || !isPressed()) return false;
 
-    // These command bytes are intentionally retained from the verified hardware setup.
-    raw_x = transfer16(0x94);
-    raw_y = transfer16(0xD4);
+    if (!transfer16(Config::Touch::X_COMMAND, raw_x)) {
+        return false;
+    }
+
+    if (!transfer16(Config::Touch::Y_COMMAND, raw_y)) {
+        return false;
+    }
 
     return isPressed();
 }
 
 bool TouchDriver::isPressed() {
-    return gpio_get_level(static_cast<gpio_num_t>(Config::PIN_TOUCH_IRQ)) == 0;
+    return gpio_get_level(
+        static_cast<gpio_num_t>(Config::PIN_TOUCH_IRQ)) == 0;
 }
 
 bool TouchDriver::isNewPress() {
@@ -86,7 +92,13 @@ bool TouchDriver::isReleased() {
 
 bool TouchDriver::getRawTouch(uint16_t &raw_x, uint16_t &raw_y) {
     if (!isPressed()) return false;
-    vTaskDelay(1);
+
+    if (Config::Touch::SETTLE_DELAY_TICKS > 0) {
+        vTaskDelay(
+            static_cast<TickType_t>(
+                Config::Touch::SETTLE_DELAY_TICKS));
+    }
+
     return readRawPair(raw_x, raw_y);
 }
 
@@ -98,33 +110,49 @@ bool TouchDriver::getTouch(uint16_t &x, uint16_t &y) {
         return false;
     }
 
-    vTaskDelay(1);
+    if (Config::Touch::SETTLE_DELAY_TICKS > 0) {
+        vTaskDelay(
+            static_cast<TickType_t>(
+                Config::Touch::SETTLE_DELAY_TICKS));
+    }
 
-    uint16_t sample_x[3] = {0, 0, 0};
-    uint16_t sample_y[3] = {0, 0, 0};
+    uint16_t sample_x[Config::Touch::SAMPLE_COUNT] = {};
+    uint16_t sample_y[Config::Touch::SAMPLE_COUNT] = {};
 
-    for (int i = 0; i < 3; ++i) {
+    for (size_t i = 0; i < Config::Touch::SAMPLE_COUNT; ++i) {
         if (!readRawPair(sample_x[i], sample_y[i])) {
             is_pressed_current_frame = false;
             return false;
         }
     }
 
-    uint16_t raw_x = median3(sample_x[0], sample_x[1], sample_x[2]);
-    uint16_t raw_y = median3(sample_y[0], sample_y[1], sample_y[2]);
+    uint16_t raw_x =
+        medianSamples(sample_x, Config::Touch::SAMPLE_COUNT);
+    uint16_t raw_y =
+        medianSamples(sample_y, Config::Touch::SAMPLE_COUNT);
 
-    if (raw_x < RAW_X_MIN) raw_x = RAW_X_MIN;
-    if (raw_x > RAW_X_MAX) raw_x = RAW_X_MAX;
-    if (raw_y < RAW_Y_MIN) raw_y = RAW_Y_MIN;
-    if (raw_y > RAW_Y_MAX) raw_y = RAW_Y_MAX;
+    if (raw_x < Config::Touch::RAW_X_MIN) {
+        raw_x = Config::Touch::RAW_X_MIN;
+    }
+    if (raw_x > Config::Touch::RAW_X_MAX) {
+        raw_x = Config::Touch::RAW_X_MAX;
+    }
+    if (raw_y < Config::Touch::RAW_Y_MIN) {
+        raw_y = Config::Touch::RAW_Y_MIN;
+    }
+    if (raw_y > Config::Touch::RAW_Y_MAX) {
+        raw_y = Config::Touch::RAW_Y_MAX;
+    }
 
     uint32_t mapped_x =
-        (static_cast<uint32_t>(raw_x - RAW_X_MIN) * (Config::SCREEN_WIDTH - 1U)) /
-        (RAW_X_MAX - RAW_X_MIN);
+        (static_cast<uint32_t>(raw_x - Config::Touch::RAW_X_MIN) *
+         (Config::SCREEN_WIDTH - 1U)) /
+        (Config::Touch::RAW_X_MAX - Config::Touch::RAW_X_MIN);
 
     uint32_t mapped_y =
-        (static_cast<uint32_t>(raw_y - RAW_Y_MIN) * (Config::SCREEN_HEIGHT - 1U)) /
-        (RAW_Y_MAX - RAW_Y_MIN);
+        (static_cast<uint32_t>(raw_y - Config::Touch::RAW_Y_MIN) *
+         (Config::SCREEN_HEIGHT - 1U)) /
+        (Config::Touch::RAW_Y_MAX - Config::Touch::RAW_Y_MIN);
 
     if (mapped_x >= Config::SCREEN_WIDTH) {
         mapped_x = Config::SCREEN_WIDTH - 1U;
@@ -134,6 +162,8 @@ bool TouchDriver::getTouch(uint16_t &x, uint16_t &y) {
     }
 
     x = static_cast<uint16_t>(mapped_x);
-    y = static_cast<uint16_t>((Config::SCREEN_HEIGHT - 1U) - mapped_y);
+    y = static_cast<uint16_t>(
+        (Config::SCREEN_HEIGHT - 1U) - mapped_y);
+
     return true;
 }
