@@ -16,10 +16,8 @@ bool RGB::init() {
     panel_config.hsync_gpio_num = Config::PIN_RGB_HSYNC;
     panel_config.de_gpio_num = Config::PIN_RGB_DE;
 
-    // The selected RGB profile in Config.h supplies the GPIO-matrix routing.
-    // LEGACY_WORKING preserves the hardware-tested mapping and compensated
-    // colour packing. V21_MATRIX_TEST uses the proposed V2.1 signal map with
-    // standard RGB565 colour packing.
+    // Config.h supplies the single fixed GPIO-matrix routing and
+    // compensated colour packing used by the active driver.
     panel_config.data_gpio_nums[0] = Config::PIN_RGB_B0;
     panel_config.data_gpio_nums[1] = Config::PIN_RGB_B1;
     panel_config.data_gpio_nums[2] = Config::PIN_RGB_B2;
