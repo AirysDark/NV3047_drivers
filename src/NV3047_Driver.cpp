@@ -7,7 +7,7 @@ bool NV3047_Driver::begin(NV3047* hw_instance) {
     if (!hw_instance->init()) return false;
 
     hardware = hw_instance;
-    setBrightness(80);
+    setBrightness(Config::Display::DEFAULT_BRIGHTNESS_PERCENT);
     return true;
 }
 
