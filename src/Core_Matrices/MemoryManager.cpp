@@ -1,93 +1,109 @@
 #include "MemoryManager.h"
-#include "../Config.h"
 
 #include <esp_heap_caps.h>
 #include <string.h>
 
 MemoryManager::MemoryManager()
-    : buffer_a(nullptr),
-      buffer_b(nullptr),
-      front_buffer(nullptr),
-      draw_buffer(nullptr) {}
+    : buffers{},
+      front_index(0),
+      draw_index(1) {}
 
 MemoryManager::~MemoryManager() {
     release();
 }
 
 bool MemoryManager::init() {
-    // Re-initialisation is safe: release any previous ownership first.
     release();
 
-    buffer_a = static_cast<uint16_t*>(heap_caps_aligned_alloc(
-        64,
-        Config::Framebuffer::BUFFER_SIZE_BYTES,
-        MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    for (size_t i = 0; i < Config::MemoryManager::BUFFER_COUNT; ++i) {
+        buffers[i] = static_cast<uint16_t*>(heap_caps_aligned_alloc(
+            Config::MemoryManager::BUFFER_ALIGNMENT,
+            Config::MemoryManager::BUFFER_SIZE_BYTES,
+            Config::MemoryManager::ALLOCATION_CAPS));
 
-    buffer_b = static_cast<uint16_t*>(heap_caps_aligned_alloc(
-        64,
-        Config::Framebuffer::BUFFER_SIZE_BYTES,
-        MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+        if (!buffers[i]) {
+            release();
+            return false;
+        }
 
-    if (!buffer_a || !buffer_b) {
-        release();
-        return false;
+        if (Config::MemoryManager::ZERO_BUFFERS_ON_INIT) {
+            memset(
+                buffers[i],
+                0,
+                Config::MemoryManager::BUFFER_SIZE_BYTES);
+        }
     }
 
-    memset(buffer_a, 0, Config::Framebuffer::BUFFER_SIZE_BYTES);
-    memset(buffer_b, 0, Config::Framebuffer::BUFFER_SIZE_BYTES);
-
-    front_buffer = buffer_a;
-    draw_buffer = buffer_b;
+    front_index = 0;
+    draw_index = 1;
     return true;
 }
 
 void MemoryManager::release() {
-    if (buffer_a) {
-        heap_caps_free(buffer_a);
-        buffer_a = nullptr;
+    for (size_t i = 0; i < Config::MemoryManager::BUFFER_COUNT; ++i) {
+        if (buffers[i]) {
+            heap_caps_free(buffers[i]);
+            buffers[i] = nullptr;
+        }
     }
 
-    if (buffer_b) {
-        heap_caps_free(buffer_b);
-        buffer_b = nullptr;
-    }
-
-    front_buffer = nullptr;
-    draw_buffer = nullptr;
+    front_index = 0;
+    draw_index = 1;
 }
 
 bool MemoryManager::isReady() const {
-    return buffer_a && buffer_b && front_buffer && draw_buffer;
+    for (size_t i = 0; i < Config::MemoryManager::BUFFER_COUNT; ++i) {
+        if (!buffers[i]) {
+            return false;
+        }
+    }
+
+    return buffers[front_index] != nullptr &&
+           buffers[draw_index] != nullptr &&
+           front_index != draw_index;
 }
 
 uint16_t* MemoryManager::getFrontBuffer() const {
-    return front_buffer;
+    return isReady() ? buffers[front_index] : nullptr;
 }
 
 uint16_t* MemoryManager::getDrawBuffer() const {
-    return draw_buffer;
+    return isReady() ? buffers[draw_index] : nullptr;
 }
 
 void MemoryManager::swapBuffers() {
     if (!isReady()) return;
 
-    uint16_t* old_front = front_buffer;
-    front_buffer = draw_buffer;
-    draw_buffer = old_front;
+    front_index = draw_index;
+    draw_index = (draw_index + 1U) % Config::MemoryManager::BUFFER_COUNT;
+
+    // BUFFER_COUNT is guaranteed >= 2, but keep this guard so the manager
+    // never returns the actively displayed front buffer as the next draw target.
+    if (draw_index == front_index) {
+        draw_index = (draw_index + 1U) % Config::MemoryManager::BUFFER_COUNT;
+    }
+}
+
+size_t MemoryManager::getBufferCount() const {
+    return Config::MemoryManager::BUFFER_COUNT;
 }
 
 size_t MemoryManager::getBufferSizeBytes() const {
-    return Config::Framebuffer::BUFFER_SIZE_BYTES;
+    return Config::MemoryManager::BUFFER_SIZE_BYTES;
 }
 
 size_t MemoryManager::getTotalAllocatedBytes() const {
-    return isReady() ? (Config::Framebuffer::BUFFER_SIZE_BYTES * Config::Framebuffer::NUM_BUFFERS) : 0;
+    if (!isReady()) return 0;
+
+    return Config::MemoryManager::BUFFER_SIZE_BYTES *
+           Config::MemoryManager::BUFFER_COUNT;
 }
 
 size_t MemoryManager::getFreePsramBytes() const {
-    return heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+    return heap_caps_get_free_size(Config::MemoryManager::DIAGNOSTIC_CAPS);
 }
 
 size_t MemoryManager::getLargestFreePsramBlockBytes() const {
-    return heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM);
+    return heap_caps_get_largest_free_block(
+        Config::MemoryManager::DIAGNOSTIC_CAPS);
 }
