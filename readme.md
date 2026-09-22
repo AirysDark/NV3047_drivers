@@ -93,6 +93,7 @@ NV3047_drivers/
     │
     └── Peripherals_HAL/
         ├── DisplayDriver.h / .cpp
+        ├── SDCardDriver.h / .cpp
         └── TouchDriver.h / .cpp
 ```
 
@@ -248,6 +249,58 @@ Y: 0-271
 For calibration work, `TouchDriver::getRawTouch()` exposes the verified raw XPT2046 values without changing the working command-byte layout. SPI transaction failures are propagated as failed reads instead of being converted into fake edge coordinates.
 
 See `examples/Touch-test/touch-test.ino`.
+
+## MicroSD support
+
+The DIS06043H microSD slot is supported through the dedicated `SDCardDriver` HAL using the Arduino-ESP32 **2.0.17** SPI SD library.
+
+The confirmed SPI wiring is configured only in `Config.h`:
+
+```cpp
+constexpr int PIN_SD_CS   = 10;
+constexpr int PIN_SD_CLK  = 12;
+constexpr int PIN_SD_MOSI = 11;
+constexpr int PIN_SD_MISO = 13;
+
+namespace SDCard {
+    constexpr uint32_t CLOCK_HZ = 4000000;
+    constexpr const char* MOUNT_POINT = "/sd";
+    constexpr uint8_t MAX_OPEN_FILES = 5;
+    constexpr bool FORMAT_IF_MOUNT_FAILED = false;
+    constexpr bool END_SPI_ON_UNMOUNT = true;
+}
+```
+
+The SD slot uses Arduino's global `SPI` object, which maps to FSPI on ESP32-S3 under core 2.0.17. The existing XPT2046 driver remains on its separate `SPI3_HOST` bus, so adding SD support does not replace the working touch wiring.
+
+The reported `SD_IRQ = 36` value is not used by this driver. GPIO36 remains assigned to the currently working touch IRQ path.
+
+Basic use:
+
+```cpp
+#include <SDCardDriver.h>
+
+SDCardDriver sd;
+
+void setup() {
+    Serial.begin(115200);
+
+    if (!sd.init()) {
+        Serial.println("SD mount failed");
+        return;
+    }
+
+    Serial.println(sd.cardSizeBytes());
+
+    fs::File file = sd.open("/test.txt", FILE_WRITE);
+    if (file) {
+        file.println("NV3047 SD test");
+        file.close();
+    }
+}
+```
+
+The SD card is **not automatically mounted by `NV3047::init()`**. This is intentional so the display/touch driver can still start normally with no card inserted. Mount it explicitly with `SDCardDriver::init()` when the application needs storage.
 
 ## Notes for future optimization
 
