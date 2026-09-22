@@ -2,13 +2,13 @@
 
 #include "../Config.h"
 
-#include <driver/spi_master.h>
+#include <SPI.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
 class TouchDriver {
 private:
-    spi_device_handle_t spi_handle = nullptr;
+    SPIClass* spi_bus = nullptr;
 
     bool transfer16(uint8_t cmd, uint16_t &value);
     bool readRawPair(uint16_t &raw_x, uint16_t &raw_y);
@@ -17,7 +17,7 @@ private:
     bool is_pressed_current_frame = false;
 
 public:
-    bool init(spi_device_handle_t handle);
+    bool init(SPIClass& bus);
 
     bool getTouch(uint16_t &x, uint16_t &y);
     bool getRawTouch(uint16_t &raw_x, uint16_t &raw_y);
