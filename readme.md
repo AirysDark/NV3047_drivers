@@ -44,15 +44,13 @@ The known-working defaults remain the same: Arduino-ESP32 **2.0.17**, 6 MHz PCLK
 
 ## Important colour mapping note
 
-The working panel colour layout is **not treated as textbook RGB565**.
-
-The physical 16-bit bus is still arranged as three 5/6/5 banks, but the verified display behaviour requires:
+The default `LEGACY_WORKING` profile is **not treated as textbook RGB565**, because hardware testing with that GPIO map required green/blue compensation:
 
 - red on the upper 5-bit bank,
 - physical blue on the middle 6-bit bank,
 - physical green on the lower 5-bit bank.
 
-Therefore these values are intentional:
+For `LEGACY_WORKING`:
 
 ```cpp
 Config::COLOR_RED   = 0xF800;
@@ -60,7 +58,7 @@ Config::COLOR_GREEN = 0x001F;
 Config::COLOR_BLUE  = 0x07E0;
 ```
 
-Do **not** swap GREEN and BLUE back to standard RGB565 values unless the RGB GPIO bank mapping is also reworked and tested on the actual panel.
+This does **not** prove that the panel itself has a non-standard native colour format. The compensated colours may instead be masking an incorrect GPIO/data-lane assignment. That is exactly what the opt-in `V21_MATRIX_TEST` profile is designed to test; it switches to standard RGB565 together with the proposed V2.1 lane map.
 
 For generated colours, use:
 
