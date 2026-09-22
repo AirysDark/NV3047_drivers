@@ -75,6 +75,14 @@ namespace Config {
         constexpr bool VSYNC_IDLE_LOW = false;
         constexpr bool DE_IDLE_HIGH = false;
         constexpr bool PCLK_IDLE_HIGH = false;
+
+        static_assert(DATA_WIDTH == 16, "This NV3047 driver build is fixed to a 16-bit RGB bus");
+        static_assert(
+            (PSRAM_TRANSFER_ALIGNMENT & (PSRAM_TRANSFER_ALIGNMENT - 1U)) == 0U,
+            "RGB PSRAM transfer alignment must be a power of two");
+        static_assert(
+            (SRAM_TRANSFER_ALIGNMENT & (SRAM_TRANSFER_ALIGNMENT - 1U)) == 0U,
+            "RGB SRAM transfer alignment must be a power of two");
     }
 
     // ============================================================
@@ -105,6 +113,10 @@ namespace Config {
         constexpr int TOUCH_CLOCK_HZ = 1000000;
         constexpr int MAX_TRANSFER_SIZE_BYTES = 32;
         constexpr int DEVICE_QUEUE_SIZE = 1;
+
+        static_assert(TOUCH_CLOCK_HZ > 0, "Touch SPI clock must be greater than zero");
+        static_assert(MAX_TRANSFER_SIZE_BYTES >= 3, "Touch SPI transfers require at least 3 bytes");
+        static_assert(DEVICE_QUEUE_SIZE >= 1, "SPI device queue size must be at least 1");
     }
 
     // ============================================================
@@ -141,6 +153,9 @@ namespace Config {
 
         static_assert(DEFAULT_BRIGHTNESS_PERCENT <= 100, "Default brightness must be 0-100");
         static_assert(FILL_BUFFER_LINES > 0, "Display fill buffer must contain at least one line");
+        static_assert(
+            FILL_BUFFER_LINES <= SCREEN_HEIGHT,
+            "Display fill buffer cannot exceed screen height");
     }
 
     // ============================================================
@@ -183,6 +198,8 @@ namespace Config {
     // ============================================================
     namespace Framebuffer {
         constexpr bool USE_32BIT_CLEAR = true;
+
+        static_assert(PCLK_FREQ_HZ > 0, "Pixel clock must be greater than zero");
 
         constexpr uint32_t PANEL_TOTAL_WIDTH =
             SCREEN_WIDTH + HSYNC_BACK_PORCH + HSYNC_FRONT_PORCH + HSYNC_PULSE_WIDTH;
