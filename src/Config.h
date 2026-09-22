@@ -210,6 +210,11 @@ namespace Config {
         constexpr bool ENABLED = true;
         constexpr bool SHARES_TOUCH_SPI_BUS = true;
 
+        // Selecting the V2.1 RGB matrix profile also brings the onboard
+        // TF interface up automatically. A missing card is non-fatal.
+        constexpr bool AUTO_MOUNT_WITH_ACTIVE_PROFILE =
+            RGB_V21_MATRIX_ACTIVE;
+
         // Conservative default for broad card compatibility.
         constexpr uint32_t CLOCK_HZ = 4000000;
 
