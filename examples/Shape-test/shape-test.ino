@@ -26,6 +26,8 @@ void setup() {
     panel.getDisplay().setBrightness(80);
 
     MemoryManager& memory = panel.getCanvas().getMemoryManager();
+    Serial.print("Framebuffer count: ");
+    Serial.println(memory.getBufferCount());
     Serial.print("Framebuffer bytes: ");
     Serial.println(memory.getBufferSizeBytes());
     Serial.print("Total framebuffer allocation: ");
