@@ -1,5 +1,7 @@
 #include "SDCardDriver.h"
 
+#include "../Bus_Layers/SPI_Master.h"
+
 SDCardDriver::~SDCardDriver() {
     end();
 }
@@ -9,33 +11,26 @@ bool SDCardDriver::init() {
         return true;
     }
 
-    // Do not guess the TF chip-select. GPIO10 is PCB-confirmed TP_CS.
     if (!isConfigured()) {
         safe_to_remove = true;
         return false;
     }
 
-    // The board is expected to share CLK/MOSI/MISO between touch and TF.
-    // The current Arduino SD backend creates its own SPI ownership, so it is
-    // deliberately blocked for the shared-bus configuration. Once TF_CS is
-    // identified, this backend should be completed using the already-owned
-    // Config::SPI_HOST_ID bus rather than starting a competing SPI controller.
-    if (Config::SDCard::SHARES_TOUCH_SPI_BUS) {
+    // Ensure touch + TF are using the exact same SPIClass instance.
+    // Core 2.0.17's SD implementation calls beginTransaction()/endTransaction()
+    // on this SPI object, so it shares the same bus mutex as TouchDriver.
+    if (!SPI_Master::init()) {
         safe_to_remove = true;
         return false;
     }
 
     safe_to_remove = false;
 
-    SPI.begin(
-        Config::PIN_SD_CLK,
-        Config::PIN_SD_MISO,
-        Config::PIN_SD_MOSI,
-        Config::PIN_SD_CS);
+    SPIClass& shared_bus = SPI_Master::bus();
 
     const bool started = SD.begin(
         Config::PIN_SD_CS,
-        SPI,
+        shared_bus,
         Config::SDCard::CLOCK_HZ,
         Config::SDCard::MOUNT_POINT,
         Config::SDCard::MAX_OPEN_FILES,
@@ -43,11 +38,6 @@ bool SDCardDriver::init() {
 
     if (!started || SD.cardType() == CARD_NONE) {
         SD.end();
-
-        if (Config::SDCard::END_SPI_ON_UNMOUNT) {
-            SPI.end();
-        }
-
         mounted = false;
         safe_to_remove = true;
         return false;
@@ -68,18 +58,11 @@ bool SDCardDriver::prepareForRemoval() {
         return true;
     }
 
-    // Any fs::File handles owned by application code must be flushed and
-    // closed before this call. This driver cannot forcibly close copies of
-    // File objects held elsewhere.
+    // Application-owned files must be flushed/closed before this call.
     SD.end();
     mounted = false;
 
-    // On the real board the TF bus is expected to be shared with touch, so
-    // Config.h defaults this to false. Never shut down a shared bus on eject.
-    if (Config::SDCard::END_SPI_ON_UNMOUNT) {
-        SPI.end();
-    }
-
+    // The SPI bus remains running because XPT2046 touch shares it.
     safe_to_remove = true;
     return true;
 }
@@ -104,7 +87,10 @@ bool SDCardDriver::exists(const char* path) const {
     return mounted && path && SD.exists(path);
 }
 
-fs::File SDCardDriver::open(const char* path, const char* mode) {
+fs::File SDCardDriver::open(
+    const char* path,
+    const char* mode) {
+
     if (!mounted || !path || !mode) {
         return fs::File();
     }
@@ -120,8 +106,12 @@ bool SDCardDriver::remove(const char* path) {
     return mounted && path && SD.remove(path);
 }
 
-bool SDCardDriver::rename(const char* from, const char* to) {
-    return mounted && from && to && SD.rename(from, to);
+bool SDCardDriver::rename(
+    const char* from,
+    const char* to) {
+
+    return mounted && from && to &&
+           SD.rename(from, to);
 }
 
 bool SDCardDriver::rmdir(const char* path) {
