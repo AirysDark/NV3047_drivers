@@ -103,7 +103,8 @@ NV3047_drivers/
 The central configuration block is:
 
 ```cpp
-namespace Config::MemoryManager {
+namespace Config {
+namespace MemoryManager {
     constexpr size_t BUFFER_COUNT = 2;
     constexpr size_t BUFFER_SIZE_BYTES =
         static_cast<size_t>(SCREEN_WIDTH) * SCREEN_HEIGHT * sizeof(uint16_t);
@@ -112,6 +113,7 @@ namespace Config::MemoryManager {
         MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT;
     constexpr uint32_t DIAGNOSTIC_CAPS = MALLOC_CAP_SPIRAM;
     constexpr bool ZERO_BUFFERS_ON_INIT = true;
+}
 }
 ```
 
