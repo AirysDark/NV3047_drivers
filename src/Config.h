@@ -11,31 +11,56 @@ namespace Config {
     constexpr uint16_t SCREEN_HEIGHT = 272;
 
     // ============================================================
+    // RGB PANEL PROFILE
+    // ============================================================
+    // LEGACY_WORKING:
+    //   Hardware-tested mapping already known to produce a stable image.
+    //
+    // V21_MATRIX_TEST:
+    //   Proposed V2.1 GPIO-matrix assignment. Use only for controlled testing.
+    //   It intentionally keeps the proven legacy timing values so pin routing
+    //   and colour order can be evaluated without changing two variables at once.
+    enum class RGBProfile : uint8_t {
+        LEGACY_WORKING = 0,
+        V21_MATRIX_TEST = 1
+    };
+
+    constexpr RGBProfile ACTIVE_RGB_PROFILE =
+        RGBProfile::LEGACY_WORKING;
+
+    constexpr bool RGB_V21_MATRIX_ACTIVE =
+        ACTIVE_RGB_PROFILE == RGBProfile::V21_MATRIX_TEST;
+
+    // ============================================================
     // RGB PANEL PINS
     // ============================================================
-    constexpr int PIN_RGB_B0 = 15;
-    constexpr int PIN_RGB_B1 = 7;
-    constexpr int PIN_RGB_B2 = 6;
-    constexpr int PIN_RGB_B3 = 5;
-    constexpr int PIN_RGB_B4 = 4;
+    constexpr int PIN_RGB_B0 = RGB_V21_MATRIX_ACTIVE ? 5  : 15;
+    constexpr int PIN_RGB_B1 = RGB_V21_MATRIX_ACTIVE ? 6  : 7;
+    constexpr int PIN_RGB_B2 = RGB_V21_MATRIX_ACTIVE ? 7  : 6;
+    constexpr int PIN_RGB_B3 = RGB_V21_MATRIX_ACTIVE ? 15 : 5;
+    constexpr int PIN_RGB_B4 = RGB_V21_MATRIX_ACTIVE ? 16 : 4;
 
-    constexpr int PIN_RGB_G0 = 9;
-    constexpr int PIN_RGB_G1 = 46;
-    constexpr int PIN_RGB_G2 = 3;
-    constexpr int PIN_RGB_G3 = 8;
-    constexpr int PIN_RGB_G4 = 16;
-    constexpr int PIN_RGB_G5 = 1;
+    constexpr int PIN_RGB_G0 = RGB_V21_MATRIX_ACTIVE ? 1  : 9;
+    constexpr int PIN_RGB_G1 = RGB_V21_MATRIX_ACTIVE ? 48 : 46;
+    constexpr int PIN_RGB_G2 = RGB_V21_MATRIX_ACTIVE ? 47 : 3;
+    constexpr int PIN_RGB_G3 = RGB_V21_MATRIX_ACTIVE ? 21 : 8;
+    constexpr int PIN_RGB_G4 = RGB_V21_MATRIX_ACTIVE ? 14 : 16;
+    constexpr int PIN_RGB_G5 = RGB_V21_MATRIX_ACTIVE ? 38 : 1;
 
-    constexpr int PIN_RGB_R0 = 14;
-    constexpr int PIN_RGB_R1 = 21;
-    constexpr int PIN_RGB_R2 = 47;
-    constexpr int PIN_RGB_R3 = 48;
-    constexpr int PIN_RGB_R4 = 45;
+    constexpr int PIN_RGB_R0 = RGB_V21_MATRIX_ACTIVE ? 45 : 14;
+    constexpr int PIN_RGB_R1 = RGB_V21_MATRIX_ACTIVE ? 42 : 21;
+    constexpr int PIN_RGB_R2 = RGB_V21_MATRIX_ACTIVE ? 41 : 47;
+    constexpr int PIN_RGB_R3 = RGB_V21_MATRIX_ACTIVE ? 40 : 48;
+    constexpr int PIN_RGB_R4 = RGB_V21_MATRIX_ACTIVE ? 39 : 45;
 
-    constexpr int PIN_RGB_DE    = 40;
-    constexpr int PIN_RGB_VSYNC = 41;
-    constexpr int PIN_RGB_HSYNC = 39;
-    constexpr int PIN_RGB_PCLK  = 42;
+    constexpr int PIN_RGB_DE =
+        RGB_V21_MATRIX_ACTIVE ? 4 : 40;
+    constexpr int PIN_RGB_VSYNC =
+        RGB_V21_MATRIX_ACTIVE ? 3 : 41;
+    constexpr int PIN_RGB_HSYNC =
+        RGB_V21_MATRIX_ACTIVE ? 46 : 39;
+    constexpr int PIN_RGB_PCLK =
+        RGB_V21_MATRIX_ACTIVE ? 9 : 42;
 
     constexpr int PIN_BACKLIGHT = 2;
 
@@ -77,6 +102,11 @@ namespace Config {
 
         constexpr int GPIO_D0 = 38;
         constexpr int GPIO_D1 = 37;
+
+        // Proposed V2.1 RGB profile consumes GPIO38 as LCD G5.
+        constexpr bool GPIO_D0_AVAILABLE =
+            !RGB_V21_MATRIX_ACTIVE;
+        constexpr bool GPIO_D1_AVAILABLE = true;
     }
 
     // ============================================================
@@ -128,23 +158,35 @@ namespace Config {
     // ============================================================
     // PANEL COLOUR MAPPING
     // ============================================================
-    // IMPORTANT: The panel's verified working colour-bank behaviour is non-standard.
-    // Red uses the upper 5-bit bank, physical blue uses the middle 6-bit bank,
-    // and physical green uses the lower 5-bit bank.
-    constexpr uint16_t packPanelColor(uint8_t red, uint8_t green, uint8_t blue) {
-        return static_cast<uint16_t>(
-            (static_cast<uint16_t>(red & 0xF8U) << 8) |
-            (static_cast<uint16_t>(blue & 0xFCU) << 3) |
-            (static_cast<uint16_t>(green) >> 3));
+    // Legacy hardware testing required GREEN/BLUE compensation.
+    // The V2.1 matrix test profile intentionally uses textbook RGB565 so the
+    // test can reveal whether the legacy colour swap was caused by GPIO/data
+    // lane ordering rather than the panel's native colour format.
+    constexpr uint16_t packPanelColor(
+        uint8_t red,
+        uint8_t green,
+        uint8_t blue) {
+
+        return RGB_V21_MATRIX_ACTIVE
+            ? static_cast<uint16_t>(
+                (static_cast<uint16_t>(red & 0xF8U) << 8) |
+                (static_cast<uint16_t>(green & 0xFCU) << 3) |
+                (static_cast<uint16_t>(blue) >> 3))
+            : static_cast<uint16_t>(
+                (static_cast<uint16_t>(red & 0xF8U) << 8) |
+                (static_cast<uint16_t>(blue & 0xFCU) << 3) |
+                (static_cast<uint16_t>(green) >> 3));
     }
 
-    constexpr uint16_t COLOR_RED         = 0xF800;
-    constexpr uint16_t COLOR_GREEN       = 0x001F;
-    constexpr uint16_t COLOR_BLUE        = 0x07E0;
-    constexpr uint16_t COLOR_WHITE       = 0xFFFF;
-    constexpr uint16_t COLOR_BLACK       = 0x0000;
-    constexpr uint16_t COLOR_LIGHT_GREY  = 0xF7DE;
-    constexpr uint16_t COLOR_SIDE_WHITE  = 0xFA3F;
+    constexpr uint16_t COLOR_RED = 0xF800;
+    constexpr uint16_t COLOR_GREEN =
+        RGB_V21_MATRIX_ACTIVE ? 0x07E0 : 0x001F;
+    constexpr uint16_t COLOR_BLUE =
+        RGB_V21_MATRIX_ACTIVE ? 0x001F : 0x07E0;
+    constexpr uint16_t COLOR_WHITE      = 0xFFFF;
+    constexpr uint16_t COLOR_BLACK      = 0x0000;
+    constexpr uint16_t COLOR_LIGHT_GREY = 0xF7DE;
+    constexpr uint16_t COLOR_SIDE_WHITE = 0xFA3F;
 
     // ============================================================
     // SPI CONFIGURATION
