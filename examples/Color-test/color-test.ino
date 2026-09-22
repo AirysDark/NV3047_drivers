@@ -7,8 +7,7 @@ void setup() {
     Serial.begin(115200);
     delay(1000);
 
-    Serial.print("RGB profile: ");
-    Serial.println(Config::RGB_PROFILE_NAME);
+    Serial.println("Hardware map: fixed Legacy Working baseline");
 
     Serial.print("PCLK/DE/VSYNC/HSYNC: ");
     Serial.print(Config::PIN_RGB_PCLK);
@@ -41,11 +40,6 @@ void setup() {
 
     myScreen.setBrightness(80);
     myScreen.fillScreen(Config::COLOR_BLACK);
-
-    if (Config::RGB_V21_MATRIX_ACTIVE) {
-        Serial.print("V2.1 TF auto-mount: ");
-        Serial.println(myScreen.isSDMounted() ? "MOUNTED" : "NO CARD / MOUNT FAILED");
-    }
 
     Serial.println("Hardware init complete. Touch screen to cycle colors.");
 }
