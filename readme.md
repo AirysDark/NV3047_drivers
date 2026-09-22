@@ -6,7 +6,7 @@ This branch is intentionally built around **Arduino-ESP32 core 2.0.17**. The wor
 
 ## What changed in v2
 
-- Added a dedicated `MemoryManager` class for the two PSRAM framebuffers.
+- Added a dedicated `MemoryManager` class for the configurable framebuffer pool.
 - Framebuffer allocation is now re-init safe and cannot leave dangling pointers after a partial allocation failure.
 - Framebuffer and display memory-owning classes are non-copyable.
 - Fixed potentially unaligned 32-bit writes in horizontal and rectangle blitters.
@@ -20,6 +20,24 @@ This branch is intentionally built around **Arduino-ESP32 core 2.0.17**. The wor
 - Reused the DisplayDriver DMA fill buffer instead of allocating/freeing it on every fill.
 - Reduced the touch SPI queue to the single slot required by polling transfers.
 - Updated stale examples and package metadata.
+
+## Single-source configuration
+
+Normal hardware and performance tuning now happens in **`src/Config.h`**. The implementation files consume those values and should not need editing when changing normal driver settings.
+
+The configuration file contains dedicated sections for:
+
+- RGB GPIOs, timing, transfer alignment and signal polarity
+- panel-specific colour-bank packing
+- SPI clock, transfer sizing and queue depth
+- XPT2046 calibration, command bytes, median sample count and settle delay
+- display brightness, PWM frequency and scratch-buffer line count
+- framebuffer memory count, size, alignment, allocation capabilities and zero-on-init
+- presentation cadence and 32-bit clearing
+
+Compile-time guards reject unsafe settings such as non-power-of-two framebuffer alignment, an undersized framebuffer, an invalid touch calibration range, an even median-filter sample count, or a non-16-bit RGB bus configuration.
+
+The known-working defaults remain the same: Arduino-ESP32 **2.0.17**, 6 MHz PCLK, the verified RGB pin order and non-standard green/blue bank behaviour.
 
 ## Important colour mapping note
 
@@ -80,7 +98,7 @@ NV3047_drivers/
 
 ### MemoryManager
 
-`MemoryManager` owns the framebuffer pool, but **all normal memory tuning is controlled from `Config.h`**. The implementation contains no fixed buffer count, alignment, allocation capability, or clear-on-init setting.
+`MemoryManager` owns the framebuffer pool, but **all normal memory tuning is controlled from `Config.h`**. The implementation contains no fixed buffer count, alignment, allocation capability, or clear-on-init setting, and draw calls do not scan the buffer pool on every access.
 
 The central configuration block is:
 
@@ -206,8 +224,8 @@ MemoryManager& memory = canvas.getMemoryManager();
 Serial.println(memory.getBufferCount());
 Serial.println(memory.getBufferSizeBytes());
 Serial.println(memory.getTotalAllocatedBytes());
-Serial.println(memory.getFreePsramBytes());
-Serial.println(memory.getLargestFreePsramBlockBytes());
+Serial.println(memory.getFreeManagedMemoryBytes());
+Serial.println(memory.getLargestFreeManagedMemoryBlockBytes());
 
 Serial.println(canvas.getFrameCount());
 Serial.println(canvas.getLastFrameTimeUs());
@@ -216,7 +234,7 @@ Serial.println(canvas.getApproxFPS());
 
 ## Touch diagnostics
 
-The normal touch path uses three samples per axis and chooses the median sample to reject single ADC spikes.
+The normal touch path uses the odd sample count configured in `Config::Touch::SAMPLE_COUNT` (default 3) and chooses the median sample to reject ADC spikes. Supported configured values are odd counts from 3 through 9.
 
 The public mapped coordinates are clamped to:
 
@@ -225,7 +243,7 @@ X: 0-479
 Y: 0-271
 ```
 
-For calibration work, `TouchDriver::getRawTouch()` exposes the verified raw XPT2046 values without changing the working command-byte layout.
+For calibration work, `TouchDriver::getRawTouch()` exposes the verified raw XPT2046 values without changing the working command-byte layout. SPI transaction failures are propagated as failed reads instead of being converted into fake edge coordinates.
 
 See `examples/Touch-test/touch-test.ino`.
 
