@@ -5,9 +5,9 @@
 
 class SPI_Master {
 public:
-    // Initializes the single shared peripheral SPI bus used by touch + TF.
+    // Initializes the active profile's touch SPI bus. V2.1 shares it with TF.
     static bool init();
 
-    // Returns the same Arduino SPI bus instance to every shared-bus peripheral.
+    // Returns the active Arduino SPI bus instance.
     static SPIClass& bus();
 };
