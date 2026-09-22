@@ -157,6 +157,116 @@ Recommended board settings:
 
 With the default configuration, PSRAM is required for the full-size application framebuffer pool.
 
+## Selectable RGB profiles
+
+The driver now contains two compile-time RGB GPIO-matrix profiles in `Config.h`.
+
+The default remains the known-working profile:
+
+```cpp
+constexpr RGBProfile ACTIVE_RGB_PROFILE =
+    RGBProfile::LEGACY_WORKING;
+```
+
+Available values:
+
+```cpp
+RGBProfile::LEGACY_WORKING
+RGBProfile::V21_MATRIX_TEST
+```
+
+### LEGACY_WORKING
+
+This preserves the hardware-tested map:
+
+```text
+PCLK  = 42
+DE    = 40
+VSYNC = 41
+HSYNC = 39
+
+B: 15, 7, 6, 5, 4
+G: 9, 46, 3, 8, 16, 1
+R: 14, 21, 47, 48, 45
+```
+
+and preserves the compensated colour constants:
+
+```cpp
+RED   = 0xF800
+GREEN = 0x001F
+BLUE  = 0x07E0
+```
+
+### V21_MATRIX_TEST
+
+This profile tests the proposed V2.1 GPIO-matrix assignment:
+
+```text
+PCLK  = 9
+DE    = 4
+VSYNC = 3
+HSYNC = 46
+
+B: 5, 6, 7, 15, 16
+G: 1, 48, 47, 21, 14, 38
+R: 45, 42, 41, 40, 39
+```
+
+For this profile, colour constants switch back to standard RGB565:
+
+```cpp
+RED   = 0xF800
+GREEN = 0x07E0
+BLUE  = 0x001F
+```
+
+The test profile deliberately keeps the proven display timing:
+
+```text
+PCLK = 6 MHz
+
+HBP = 43
+HFP = 8
+HPW = 2
+
+VBP = 12
+VFP = 8
+VPW = 2
+```
+
+This isolates the experiment to **GPIO-matrix routing and colour-lane order**. The unverified 9 MHz / 8-8-4 timing proposal is not enabled.
+
+To test the V2.1 map, change only:
+
+```cpp
+constexpr RGBProfile ACTIVE_RGB_PROFILE =
+    RGBProfile::V21_MATRIX_TEST;
+```
+
+To revert immediately:
+
+```cpp
+constexpr RGBProfile ACTIVE_RGB_PROFILE =
+    RGBProfile::LEGACY_WORKING;
+```
+
+`examples/Color-test/color-test.ino` prints the selected profile and the active PCLK/DE/VSYNC/HSYNC pins at startup.
+
+### Expansion conflict under V21_MATRIX_TEST
+
+The proposed V2.1 RGB map uses:
+
+```text
+GPIO38 = LCD G5
+```
+
+but this physical board also exposes GPIO38 on the `GPIO_D` expansion connector.
+
+Therefore `Config::Expansion::GPIO_D0_AVAILABLE` becomes `false` while `V21_MATRIX_TEST` is selected. Do not drive an external device on GPIO38 during that RGB test.
+
+The V2.1 RGB map remains a **test hypothesis**, not a verified production mapping. A correct picture with standard RGB565 colours would be strong evidence for it; a blank, unstable, or mis-coloured image would not justify changing the known-working default.
+
 ## RGB timing
 
 The known-stable hardware configuration remains:
@@ -411,7 +521,7 @@ sd.isSafeToRemove();  // true
 
 After inserting a card again, call `sd.init()`.
 
-## Google / alternative V2.1 RGB reference
+## Origin of the V2.1 RGB test profile
 
 A suggested V2.1 pin block was collected with this LCD mapping:
 
@@ -441,11 +551,11 @@ A suggested V2.1 pin block was collected with this LCD mapping:
 #define LCD_B4 16
 ```
 
-This is retained **only as a rejected/alternative reference**, not as the active LCD configuration.
+This mapping is now retained as the opt-in `V21_MATRIX_TEST` profile. It is still **unverified** and is not the default.
 
-The main reason is that it assigns `LCD_G0 = GPIO0`, while the V2.1 PCB and Elecrow definition use **GPIO0 as TP_CS**. A continuously driven RGB data line cannot also operate as the XPT2046 chip-select in the normal direct-wired arrangement.
+The earlier version of this reference assigned `LCD_G0 = GPIO0`, which conflicted with the PCB-verified `TP_CS = GPIO0`. The revised test profile therefore uses `LCD_G0 = GPIO1`, matching the newer V2.1 proposal.
 
-The known-working driver continues to use its existing LCD GPIO set and timing:
+The known-working `LEGACY_WORKING` profile continues to use:
 
 ```text
 DE    = 40
