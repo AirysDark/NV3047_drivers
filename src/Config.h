@@ -50,6 +50,16 @@ namespace Config {
     constexpr int PIN_TOUCH_CS  = 18;
     constexpr int PIN_TOUCH_IRQ = 36;
 
+
+    // ============================================================
+    // MICRO-SD (TF) CARD PINS
+    // ============================================================
+    // Confirmed DIS06043H SPI SD wiring.
+    constexpr int PIN_SD_CS   = 10;
+    constexpr int PIN_SD_CLK  = 12;
+    constexpr int PIN_SD_MOSI = 11;
+    constexpr int PIN_SD_MISO = 13;
+
     // ============================================================
     // RGB PANEL TIMING
     // ============================================================
@@ -119,6 +129,24 @@ namespace Config {
         static_assert(TOUCH_CLOCK_HZ > 0, "Touch SPI clock must be greater than zero");
         static_assert(MAX_TRANSFER_SIZE_BYTES >= 3, "Touch SPI transfers require at least 3 bytes");
         static_assert(DEVICE_QUEUE_SIZE >= 1, "SPI device queue size must be at least 1");
+    }
+
+
+    // ============================================================
+    // SD CARD CONFIGURATION
+    // ============================================================
+    namespace SDCard {
+        // Conservative default for broad card compatibility.
+        // Can be increased later from Config.h after hardware testing.
+        constexpr uint32_t CLOCK_HZ = 4000000;
+
+        constexpr const char* MOUNT_POINT = "/sd";
+        constexpr uint8_t MAX_OPEN_FILES = 5;
+        constexpr bool FORMAT_IF_MOUNT_FAILED = false;
+        constexpr bool END_SPI_ON_UNMOUNT = true;
+
+        static_assert(CLOCK_HZ > 0, "SD card SPI clock must be greater than zero");
+        static_assert(MAX_OPEN_FILES > 0, "SD card must allow at least one open file");
     }
 
     // ============================================================
