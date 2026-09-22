@@ -3,17 +3,20 @@
 #include <Arduino.h>
 
 bool SPI_Master::init() {
-    // Keep every chip-select inactive before the shared bus starts.
+    // Keep the active profile's touch chip-select inactive before SPI starts.
     pinMode(Config::PIN_TOUCH_CS, OUTPUT);
     digitalWrite(Config::PIN_TOUCH_CS, HIGH);
 
-    pinMode(Config::PIN_SD_CS, OUTPUT);
-    digitalWrite(Config::PIN_SD_CS, HIGH);
+    // TF exists only in the V2.1 profile. Do not touch GPIO10 in legacy mode.
+    if (Config::SDCard::ENABLED && Config::PIN_SD_CS >= 0) {
+        pinMode(Config::PIN_SD_CS, OUTPUT);
+        digitalWrite(Config::PIN_SD_CS, HIGH);
+    }
 
     SPI.begin(
-        Config::PIN_SHARED_SPI_SCLK,
-        Config::PIN_SHARED_SPI_MISO,
-        Config::PIN_SHARED_SPI_MOSI,
+        Config::PIN_SPI_SCLK,
+        Config::PIN_SPI_MISO,
+        Config::PIN_SPI_MOSI,
         -1);
 
     return SPI.bus() != nullptr;
