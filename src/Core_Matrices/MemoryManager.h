@@ -16,7 +16,11 @@ public:
 
     bool isReady() const;
     bool isExternalProviderActive() const {
-        return ready && external_provider != nullptr;
+        return
+            ready &&
+            external_provider != nullptr &&
+            external_provider->is_ready != nullptr &&
+            external_provider->is_ready();
     }
 
     uint16_t* getFrontBuffer() const;
