@@ -10,6 +10,7 @@ public:
     bool begin(NV3047* hw_instance);
 
     bool isReady() const { return hardware != nullptr; }
+    bool isExternalMemoryManagerActive() const;
 
     void setBrightness(uint8_t percentage);
     void sleep();
