@@ -375,9 +375,9 @@ Serial.println(canvas.getApproxFPS());
 
 ## Touch diagnostics
 
-Touch wiring now follows the selected hardware profile.
+Touch wiring and transport now follow the selected hardware profile.
 
-`LEGACY_WORKING` preserves the old `main` touch map:
+`LEGACY_WORKING` restores the old `main` dedicated ESP-IDF touch transport and pin map:
 
 ```text
 GPIO20 = TP_CLK
@@ -387,7 +387,7 @@ GPIO18 = TP_CS
 GPIO36 = TP_IRQ
 ```
 
-`V21_MATRIX_TEST` uses the photographed/published V2.1 touch map:
+`V21_MATRIX_TEST` keeps the Arduino `SPIClass` shared touch/TF transport and uses the photographed/published V2.1 touch map:
 
 ```text
 GPIO12 = TP_CLK
@@ -407,7 +407,9 @@ Config::PIN_TOUCH_CS
 Config::PIN_TOUCH_IRQ
 ```
 
-The normal touch path uses the odd sample count configured in `Config::Touch::SAMPLE_COUNT` (default 3) and chooses the median sample to reject ADC spikes.
+Under `LEGACY_WORKING`, chip select is driven by the ESP-IDF SPI device exactly as in the old main architecture. Under `V21_MATRIX_TEST`, chip select is controlled around Arduino `SPIClass` transactions because touch shares the bus with TF.
+
+The higher-level touch processing is common to both profiles: the XPT2046 command bytes remain `0x94` / `0xD4`, the existing calibration range is retained, the odd sample count configured in `Config::Touch::SAMPLE_COUNT` (default 3) uses a median filter, and mapped output is clamped to X `0-479` and Y `0-271`.
 
 The public mapped coordinates remain:
 
