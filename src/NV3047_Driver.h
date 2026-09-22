@@ -1,22 +1,33 @@
 #pragma once
+
 #include "NV3047.h"
 
 class NV3047_Driver {
 private:
-    // Tracks your active global hardware manager via a safe reference pointer
-    NV3047* hardware;
+    NV3047* hardware = nullptr;
 
 public:
-    // Dynamic lifecycle entry: Binds the live running hardware stack directly into the driver engine
-    void begin(NV3047* hw_instance);
-    
-    // Panel power management pipeline
-    void setBrightness(uint8_t brightness);
-    
-    // High-performance canvas streaming methods
+    bool begin(NV3047* hw_instance);
+
+    bool isReady() const { return hardware != nullptr; }
+
+    void setBrightness(uint8_t percentage);
+    void sleep();
+    void wake();
+
     void pushPixels(int x, int y, int w, int h, const uint16_t* data);
+    void clear(uint16_t color = Config::COLOR_BLACK);
     void fillScreen(uint16_t color);
-    
-    // Calibrated touch tracking engine proxy
+    bool present();
+
+    void drawPixel(int16_t x, int16_t y, uint16_t color);
+    void fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color);
+    void drawHLine(int16_t x, int16_t y, int16_t w, uint16_t color);
+    void drawVLine(int16_t x, int16_t y, int16_t h, uint16_t color);
+    void drawRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color);
+
     bool getTouch(uint16_t &x, uint16_t &y);
+
+    Framebuffer* getCanvas();
+    const Framebuffer* getCanvas() const;
 };
