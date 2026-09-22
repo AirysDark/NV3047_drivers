@@ -1,45 +1,89 @@
 #include "NV3047_Driver.h"
 
-void NV3047_Driver::begin(NV3047* hw_instance) {
-    // Bind the global running hardware stack pointer to this driver proxy instance
+bool NV3047_Driver::begin(NV3047* hw_instance) {
+    hardware = nullptr;
+
+    if (!hw_instance) return false;
+    if (!hw_instance->init()) return false;
+
     hardware = hw_instance;
-    
+    setBrightness(80);
+    return true;
+}
+
+void NV3047_Driver::setBrightness(uint8_t percentage) {
     if (hardware) {
-        hardware->init();
-        setBrightness(128); // Matches your original bare-metal setup level cleanly
+        hardware->getDisplay().setBrightness(percentage);
     }
 }
 
-void NV3047_Driver::setBrightness(uint8_t brightness) {
+void NV3047_Driver::sleep() {
     if (hardware) {
-        // Redirects straight to your optimized backlight power engine percentages
-        hardware->getDisplay().setBrightness(brightness);
+        hardware->getDisplay().sleep();
+    }
+}
+
+void NV3047_Driver::wake() {
+    if (hardware) {
+        hardware->getDisplay().wake();
     }
 }
 
 void NV3047_Driver::pushPixels(int x, int y, int w, int h, const uint16_t* data) {
     if (hardware) {
-        // Streams the data block array safely onto your canvas primitive layers
         hardware->getCanvas().drawBitmap(x, y, w, h, data);
     }
 }
 
-void NV3047_Driver::fillScreen(uint16_t color) {
+void NV3047_Driver::clear(uint16_t color) {
     if (hardware) {
-        // Leverages your high-performance 32-bit clearing blocks directly
         hardware->getCanvas().clear(color);
-        
-        // --- FIXED: AUTOMATIC SWAP FOR BARE-METAL SKETCHES ---
-        // Forces the double-buffered canvas to flip straight to the display glass.
-        // This immediately releases the memory lock and opens the SPI clock lines wide 
-        // so your updated self-throttling touch driver can read your finger normally!
-        hardware->getCanvas().swap();
     }
 }
 
+void NV3047_Driver::fillScreen(uint16_t color) {
+    if (!hardware) return;
+
+    hardware->getCanvas().clear(color);
+    hardware->getCanvas().swap();
+}
+
+bool NV3047_Driver::present() {
+    return hardware && hardware->getCanvas().swap();
+}
+
+void NV3047_Driver::drawPixel(int16_t x, int16_t y, uint16_t color) {
+    if (hardware) hardware->getCanvas().drawPixel(x, y, color);
+}
+
+void NV3047_Driver::fillRect(
+    int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color) {
+    if (hardware) hardware->getCanvas().fillRect(x, y, w, h, color);
+}
+
+void NV3047_Driver::drawHLine(
+    int16_t x, int16_t y, int16_t w, uint16_t color) {
+    if (hardware) hardware->getCanvas().drawHLine(x, y, w, color);
+}
+
+void NV3047_Driver::drawVLine(
+    int16_t x, int16_t y, int16_t h, uint16_t color) {
+    if (hardware) hardware->getCanvas().drawVLine(x, y, h, color);
+}
+
+void NV3047_Driver::drawRect(
+    int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color) {
+    if (hardware) hardware->getCanvas().drawRect(x, y, w, h, color);
+}
+
 bool NV3047_Driver::getTouch(uint16_t &x, uint16_t &y) {
-    if (!hardware) return false;
-    
-    // Pulls from your precise multi-sampled orientation remapping matrix
-    return hardware->getTouch().getTouch(x, y);
+    return hardware && hardware->getTouch().getTouch(x, y);
+}
+
+Framebuffer* NV3047_Driver::getCanvas() {
+    return hardware ? &hardware->getCanvas() : nullptr;
+}
+
+const Framebuffer* NV3047_Driver::getCanvas() const {
+    return hardware ? &hardware->getCanvas() : nullptr;
 }
