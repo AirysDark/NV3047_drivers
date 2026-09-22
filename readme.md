@@ -587,6 +587,53 @@ BL    = 2
 
 The working RGB data assignments in this project deliberately use a non-standard software bank/bit order because that is how the physical panel was made to produce the correct colours during hardware testing. Do not replace them from the Google reference merely to make the labels look textbook-correct.
 
+## Optional NV3047_memorymanager takeover
+
+`NV3047_drivers` can now detect the separate `NV3047_memorymanager` library at runtime without making it a hard dependency.
+
+Normal driver-only sketches are unchanged:
+
+```cpp
+#include <NV3047_Driver.h>
+```
+
+The driver's local `Core_Matrices/MemoryManager` owns the framebuffer pool.
+
+To enable the external automatic manager, add its normal umbrella include to the sketch:
+
+```cpp
+#include <NV3047_Memory.h>
+#include <NV3047_Driver.h>
+```
+
+No extra registration call is required. `NV3047_Memory.h` registers a versioned memory-provider ABI before Arduino `setup()`. During framebuffer initialization, the driver detects that provider and delegates ownership to `NV3047_memorymanager::AutoMemory`.
+
+When takeover is active, the external library owns:
+
+- the front/back RGB565 framebuffers,
+- framebuffer role swapping,
+- framebuffer memory diagnostics,
+- per-frame scratch reset/service hooks,
+- the display driver's persistent DMA fill buffer.
+
+The local driver allocator is bypassed. If an external provider has registered but cannot initialize, driver initialization fails cleanly instead of silently creating a second allocator.
+
+Runtime status is available through:
+
+```cpp
+display.isExternalMemoryManagerActive();
+```
+
+or through the canvas:
+
+```cpp
+display.getCanvas()->
+    getMemoryManager().
+    isExternalProviderActive();
+```
+
+The integration remains compatible with Arduino-ESP32 core **2.0.17** and the driver still works independently when the external library is absent.
+
 ## Notes for future optimization
 
 The current default design intentionally keeps the ESP-IDF RGB driver's own framebuffer behaviour plus the configured application framebuffer pool because that is the stable Core 2.0.17 configuration.
