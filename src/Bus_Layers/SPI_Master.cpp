@@ -5,8 +5,6 @@
 namespace {
 
 spi_device_handle_t legacy_touch_device = nullptr;
-bool legacy_bus_initialized = false;
-
 bool initLegacyTouchBus() {
     if (legacy_touch_device) {
         return true;
@@ -30,8 +28,6 @@ bool initLegacyTouchBus() {
         result != ESP_ERR_INVALID_STATE) {
         return false;
     }
-
-    legacy_bus_initialized = true;
 
     spi_device_interface_config_t devcfg = {};
     devcfg.clock_speed_hz = Config::SPI::TOUCH_CLOCK_HZ;
