@@ -250,6 +250,51 @@ For calibration work, `TouchDriver::getRawTouch()` exposes the verified raw XPT2
 
 See `examples/Touch-test/touch-test.ino`.
 
+## External expansion ports (future reference)
+
+The CrowPanel exposes two external **HY2.0-4P** expansion connectors. These are documented here for future peripherals and are **not currently initialized or claimed by the NV3047 driver**.
+
+### UART1 port
+
+```text
+Pin 1 : GND
+Pin 2 : 3V3
+Pin 3 : GPIO18  (RX)
+Pin 4 : GPIO17  (TX)
+```
+
+Suggested future use:
+
+```cpp
+constexpr int UART1_RX = 18;
+constexpr int UART1_TX = 17;
+```
+
+### GPIO_D port
+
+```text
+Pin 1 : GND
+Pin 2 : 3V3
+Pin 3 : GPIO19
+Pin 4 : GPIO20
+```
+
+Suggested future use:
+
+```cpp
+constexpr int EXPANSION_GPIO_D1 = 19;
+constexpr int EXPANSION_GPIO_D2 = 20;
+```
+
+### Important pin-conflict note
+
+The current working driver configuration already uses some of these GPIO numbers internally:
+
+- GPIO18 is currently the working touch chip-select pin.
+- GPIO19 and GPIO20 are currently used by the working touch SPI bus.
+
+Because of that, these expansion pins should be treated as **board-reference information only** until the hardware revision and internal routing are verified. Do not enable external devices on these pins at the same time as the current touch configuration without first resolving the GPIO conflict.
+
 ## Alternative / reference DIS06043H pin map
 
 The following pinout has been collected as an **alternative/reference DIS06043H mapping**. It is retained for hardware comparison and future board-revision investigation.
