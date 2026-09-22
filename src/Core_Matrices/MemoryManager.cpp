@@ -6,7 +6,8 @@
 MemoryManager::MemoryManager()
     : buffers{},
       front_index(0),
-      draw_index(1) {}
+      draw_index(1),
+      ready(false) {}
 
 MemoryManager::~MemoryManager() {
     release();
@@ -36,10 +37,13 @@ bool MemoryManager::init() {
 
     front_index = 0;
     draw_index = 1;
+    ready = true;
     return true;
 }
 
 void MemoryManager::release() {
+    ready = false;
+
     for (size_t i = 0; i < Config::MemoryManager::BUFFER_COUNT; ++i) {
         if (buffers[i]) {
             heap_caps_free(buffers[i]);
@@ -52,33 +56,23 @@ void MemoryManager::release() {
 }
 
 bool MemoryManager::isReady() const {
-    for (size_t i = 0; i < Config::MemoryManager::BUFFER_COUNT; ++i) {
-        if (!buffers[i]) {
-            return false;
-        }
-    }
-
-    return buffers[front_index] != nullptr &&
-           buffers[draw_index] != nullptr &&
-           front_index != draw_index;
+    return ready;
 }
 
 uint16_t* MemoryManager::getFrontBuffer() const {
-    return isReady() ? buffers[front_index] : nullptr;
+    return ready ? buffers[front_index] : nullptr;
 }
 
 uint16_t* MemoryManager::getDrawBuffer() const {
-    return isReady() ? buffers[draw_index] : nullptr;
+    return ready ? buffers[draw_index] : nullptr;
 }
 
 void MemoryManager::swapBuffers() {
-    if (!isReady()) return;
+    if (!ready) return;
 
     front_index = draw_index;
     draw_index = (draw_index + 1U) % Config::MemoryManager::BUFFER_COUNT;
 
-    // BUFFER_COUNT is guaranteed >= 2, but keep this guard so the manager
-    // never returns the actively displayed front buffer as the next draw target.
     if (draw_index == front_index) {
         draw_index = (draw_index + 1U) % Config::MemoryManager::BUFFER_COUNT;
     }
@@ -93,17 +87,17 @@ size_t MemoryManager::getBufferSizeBytes() const {
 }
 
 size_t MemoryManager::getTotalAllocatedBytes() const {
-    if (!isReady()) return 0;
+    if (!ready) return 0;
 
     return Config::MemoryManager::BUFFER_SIZE_BYTES *
            Config::MemoryManager::BUFFER_COUNT;
 }
 
-size_t MemoryManager::getFreePsramBytes() const {
+size_t MemoryManager::getFreeManagedMemoryBytes() const {
     return heap_caps_get_free_size(Config::MemoryManager::DIAGNOSTIC_CAPS);
 }
 
-size_t MemoryManager::getLargestFreePsramBlockBytes() const {
+size_t MemoryManager::getLargestFreeManagedMemoryBlockBytes() const {
     return heap_caps_get_largest_free_block(
         Config::MemoryManager::DIAGNOSTIC_CAPS);
 }
