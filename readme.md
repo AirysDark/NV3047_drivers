@@ -208,7 +208,7 @@ Y: 0-271
 
 For calibration work, `TouchDriver::getRawTouch()` exposes the verified raw XPT2046 values without changing the working command-byte layout.
 
-See `examples/Touch-test/Touch-test.ino`.
+See `examples/Touch-test/touch-test.ino`.
 
 ## Notes for future optimization
 
