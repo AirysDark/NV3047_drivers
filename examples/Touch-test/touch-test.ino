@@ -6,6 +6,20 @@ NV3047 panel;
 void setup() {
     Serial.begin(115200);
 
+    Serial.print("Hardware profile: ");
+    Serial.println(Config::RGB_PROFILE_NAME);
+
+    Serial.print("Touch SCLK/MOSI/MISO/CS/IRQ: ");
+    Serial.print(Config::PIN_SPI_SCLK);
+    Serial.print("/");
+    Serial.print(Config::PIN_SPI_MOSI);
+    Serial.print("/");
+    Serial.print(Config::PIN_SPI_MISO);
+    Serial.print("/");
+    Serial.print(Config::PIN_TOUCH_CS);
+    Serial.print("/");
+    Serial.println(Config::PIN_TOUCH_IRQ);
+
     if (!panel.init()) {
         Serial.println("NV3047 initialization FAILED.");
         while (true) {
