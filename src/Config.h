@@ -11,6 +11,17 @@
 #define NV3047_ENABLE_PERF_COUNTERS 0
 #endif
 
+// Low-overhead frame/presentation timing can be enabled without adding
+// a micros() pair around every drawing primitive. The legacy umbrella
+// switch still enables both modes for backward compatibility.
+#ifndef NV3047_ENABLE_PRESENT_PROFILING
+#define NV3047_ENABLE_PRESENT_PROFILING NV3047_ENABLE_PERF_COUNTERS
+#endif
+
+#ifndef NV3047_ENABLE_PRIMITIVE_PROFILING
+#define NV3047_ENABLE_PRIMITIVE_PROFILING NV3047_ENABLE_PERF_COUNTERS
+#endif
+
 namespace Config {
     constexpr uint16_t SCREEN_WIDTH = 480;
     constexpr uint16_t SCREEN_HEIGHT = 272;
