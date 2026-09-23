@@ -24,7 +24,10 @@ public:
     void drawRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color);
     void drawBitmap(int16_t x, int16_t y, int16_t w, int16_t h, const uint16_t* bitmap);
 
-    uint16_t* getDrawBuffer() const { return memory.getDrawBuffer(); }
+    // Returns the frame-local cached draw pointer. The cache is refreshed
+    // only after a successful buffer-role swap, avoiding provider delegation
+    // on every drawing primitive.
+    uint16_t* getDrawBuffer() const { return cached_draw_buffer; }
     MemoryManager& getMemoryManager() { return memory; }
     const MemoryManager& getMemoryManager() const { return memory; }
 
@@ -37,8 +40,11 @@ public:
     Framebuffer& operator=(const Framebuffer&) = delete;
 
 private:
+    bool refreshDrawBuffer();
+
     esp_lcd_panel_handle_t panel_handle;
     MemoryManager memory;
+    uint16_t* cached_draw_buffer;
 
     uint32_t last_swap_micros;
     uint32_t last_frame_time_us;
