@@ -8,6 +8,8 @@
 #include "MemoryManager.h"
 
 struct FramebufferPerfCounters {
+    uint32_t frame_work_us;
+    uint32_t frame_interval_us;
     uint32_t clear_us;
     uint32_t draw_us;
     uint32_t draw_calls;
@@ -69,6 +71,7 @@ private:
     FramebufferPerfCounters perf_last;
 
     uint32_t last_swap_micros;
+    uint32_t last_present_end_micros;
     uint32_t last_frame_time_us;
     uint32_t frame_count;
 };
