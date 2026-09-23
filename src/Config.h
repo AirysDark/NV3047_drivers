@@ -44,21 +44,22 @@ namespace Config {
     // ============================================================
     // TOUCH SPI PINS
     // ============================================================
-    // Fixed hardware map from the established Legacy Working baseline.
-    constexpr int PIN_SPI_SCLK  = 20;
-    constexpr int PIN_SPI_MOSI  = 19;
-    constexpr int PIN_SPI_MISO  = -1;
-    constexpr int PIN_TOUCH_CS  = 18;
+    // Physically verified XPT2046 bus on this CrowPanel 4.3.
+    constexpr int PIN_SPI_SCLK  = 12;
+    constexpr int PIN_SPI_MOSI  = 11;
+    constexpr int PIN_SPI_MISO  = 13;
+    constexpr int PIN_TOUCH_CS  = 0;
     constexpr int PIN_TOUCH_IRQ = 36;
 
     // ============================================================
     // MICRO-SD (TF) CARD PINS
     // ============================================================
-    // The fixed baseline does not currently configure the TF interface.
-    constexpr int PIN_SD_CS   = -1;
-    constexpr int PIN_SD_CLK  = -1;
-    constexpr int PIN_SD_MOSI = -1;
-    constexpr int PIN_SD_MISO = -1;
+    // TF shares the physical SPI signals with touch. SD remains disabled
+    // during touch recovery, but CS is driven HIGH before touch starts.
+    constexpr int PIN_SD_CS   = 10;
+    constexpr int PIN_SD_CLK  = 12;
+    constexpr int PIN_SD_MOSI = 11;
+    constexpr int PIN_SD_MISO = 13;
 
     // ============================================================
     // EXTERNAL EXPANSION / BOARD SILKSCREEN PINS
@@ -70,8 +71,7 @@ namespace Config {
         constexpr int GPIO_D0 = 38;
         constexpr int GPIO_D1 = 37;
 
-        // GPIO18 is currently consumed by touch CS.
-        constexpr bool UART1_RX_AVAILABLE = false;
+        constexpr bool UART1_RX_AVAILABLE = true;
         constexpr bool UART1_TX_AVAILABLE = true;
 
         constexpr bool GPIO_D0_AVAILABLE = true;
@@ -86,10 +86,9 @@ namespace Config {
         constexpr int BCLK  = 35;
         constexpr int SDIN  = 20;
 
-        // GPIO19 and GPIO20 are currently consumed by touch.
-        constexpr bool LRCLK_AVAILABLE = false;
+        constexpr bool LRCLK_AVAILABLE = true;
         constexpr bool BCLK_AVAILABLE = true;
-        constexpr bool SDIN_AVAILABLE = false;
+        constexpr bool SDIN_AVAILABLE = true;
     }
 
     // ============================================================
@@ -157,10 +156,10 @@ namespace Config {
     // SPI CONFIGURATION
     // ============================================================
     namespace SPI {
-        constexpr int TOUCH_CLOCK_HZ = 1000000;
+        constexpr int TOUCH_CLOCK_HZ = 2500000;
 
-        constexpr spi_host_device_t TOUCH_HOST = SPI3_HOST;
-        constexpr int MAX_TRANSFER_BYTES = 32;
+        constexpr spi_host_device_t TOUCH_HOST = SPI2_HOST;
+        constexpr int MAX_TRANSFER_BYTES = 4096;
         constexpr int QUEUE_SIZE = 7;
 
         static_assert(TOUCH_CLOCK_HZ > 0, "Touch SPI clock must be greater than zero");
@@ -174,7 +173,7 @@ namespace Config {
     // ============================================================
     namespace SDCard {
         constexpr bool ENABLED = false;
-        constexpr bool SHARES_TOUCH_SPI_BUS = false;
+        constexpr bool SHARES_TOUCH_SPI_BUS = true;
         constexpr bool AUTO_MOUNT = false;
 
         constexpr uint32_t CLOCK_HZ = 4000000;
@@ -202,9 +201,9 @@ namespace Config {
         constexpr uint16_t RAW_Y_MIN = 250;
         constexpr uint16_t RAW_Y_MAX = 3750;
 
-        // Verified working command bytes for this panel/Core 2.0.17 setup.
-        constexpr uint8_t X_COMMAND = 0x94;
-        constexpr uint8_t Y_COMMAND = 0xD4;
+        // Physically verified working command bytes.
+        constexpr uint8_t X_COMMAND = 0x90;
+        constexpr uint8_t Y_COMMAND = 0xD0;
 
         // Odd sample counts allow a true median filter.
         constexpr size_t SAMPLE_COUNT = 3;
