@@ -258,6 +258,7 @@ void Framebuffer::clear(uint16_t color) {
 #endif
 }
 
+#if NV3047_ENABLE_PRIMITIVE_PROFILING
 void Framebuffer::drawPixel(
     int16_t x,
     int16_t y,
@@ -373,6 +374,7 @@ void Framebuffer::drawBitmap(
     ++perf_pending.draw_calls;
 #endif
 }
+#endif
 
 bool Framebuffer::isReady() const {
     return
