@@ -21,6 +21,7 @@ Framebuffer::Framebuffer()
       perf_pending{},
       perf_last{},
       last_swap_micros(0),
+      last_present_end_micros(0),
       last_frame_time_us(0),
       frame_count(0) {}
 
@@ -31,6 +32,7 @@ bool Framebuffer::init(esp_lcd_panel_handle_t panelHandle) {
 
     panel_handle = panelHandle;
     last_swap_micros = 0;
+    last_present_end_micros = 0;
     last_frame_time_us = 0;
     frame_count = 0;
     cached_draw_buffer = nullptr;
@@ -77,8 +79,13 @@ bool Framebuffer::swap() {
         return false;
     }
 
-#if NV3047_ENABLE_PERF_COUNTERS
+#if NV3047_ENABLE_PRESENT_PROFILING
     const uint32_t total_present_start = micros();
+
+    if (last_present_end_micros != 0) {
+        perf_pending.frame_work_us =
+            total_present_start - last_present_end_micros;
+    }
 #endif
 
     const uint32_t target_interval =
@@ -106,7 +113,7 @@ bool Framebuffer::swap() {
 
     const uint32_t present_start = micros();
 
-#if NV3047_ENABLE_PERF_COUNTERS
+#if NV3047_ENABLE_PRESENT_PROFILING
     perf_pending.present_wait_us =
         present_start - total_present_start;
     const uint32_t panel_draw_start = present_start;
@@ -114,6 +121,9 @@ bool Framebuffer::swap() {
 
     if (last_swap_micros != 0) {
         last_frame_time_us = present_start - last_swap_micros;
+#if NV3047_ENABLE_PRESENT_PROFILING
+        perf_pending.frame_interval_us = last_frame_time_us;
+#endif
     }
     last_swap_micros = present_start;
 
@@ -125,23 +135,25 @@ bool Framebuffer::swap() {
         Config::SCREEN_HEIGHT,
         cached_draw_buffer);
 
-#if NV3047_ENABLE_PERF_COUNTERS
+#if NV3047_ENABLE_PRESENT_PROFILING
     perf_pending.panel_draw_us =
         micros() - panel_draw_start;
 #endif
 
     if (result != ESP_OK) {
-#if NV3047_ENABLE_PERF_COUNTERS
+#if NV3047_ENABLE_PRESENT_PROFILING
         perf_pending.present_failures = 1;
+        const uint32_t present_end = micros();
         perf_pending.total_present_us =
-            micros() - total_present_start;
+            present_end - total_present_start;
+        last_present_end_micros = present_end;
         perf_last = perf_pending;
         zeroPerfCounters(perf_pending);
 #endif
         return false;
     }
 
-#if NV3047_ENABLE_PERF_COUNTERS
+#if NV3047_ENABLE_PRESENT_PROFILING
     const bool external_mode =
         memory.isExternalProviderActive();
     const uint32_t swap_start = micros();
@@ -149,7 +161,7 @@ bool Framebuffer::swap() {
 
     memory.swapBuffers();
 
-#if NV3047_ENABLE_PERF_COUNTERS
+#if NV3047_ENABLE_PRESENT_PROFILING
     const uint32_t swap_time = micros() - swap_start;
     if (external_mode) {
         perf_pending.provider_swap_us = swap_time;
@@ -164,23 +176,29 @@ bool Framebuffer::swap() {
     // pointer once here; all drawing calls for the next frame use this cache.
     if (!refreshDrawBuffer()) {
         ready_state = false;
-#if NV3047_ENABLE_PERF_COUNTERS
+#if NV3047_ENABLE_PRESENT_PROFILING
         perf_pending.draw_buffer_refresh_us =
             micros() - refresh_start;
         perf_pending.present_failures = 1;
+        const uint32_t present_end = micros();
         perf_pending.total_present_us =
-            micros() - total_present_start;
+            present_end - total_present_start;
+        last_present_end_micros = present_end;
         perf_last = perf_pending;
         zeroPerfCounters(perf_pending);
 #endif
         return false;
     }
 
-#if NV3047_ENABLE_PERF_COUNTERS
+#if NV3047_ENABLE_PRESENT_PROFILING
     perf_pending.draw_buffer_refresh_us =
         micros() - refresh_start;
+
+    const uint32_t present_end = micros();
     perf_pending.total_present_us =
-        micros() - total_present_start;
+        present_end - total_present_start;
+    last_present_end_micros = present_end;
+
     perf_last = perf_pending;
     zeroPerfCounters(perf_pending);
 #endif
@@ -193,7 +211,7 @@ void Framebuffer::clear(uint16_t color) {
     uint16_t* draw_buffer = cached_draw_buffer;
     if (!draw_buffer) return;
 
-#if NV3047_ENABLE_PERF_COUNTERS
+#if NV3047_ENABLE_PRESENT_PROFILING
     const uint32_t perf_start = micros();
 #endif
 
@@ -235,7 +253,7 @@ void Framebuffer::clear(uint16_t color) {
         }
     }
 
-#if NV3047_ENABLE_PERF_COUNTERS
+#if NV3047_ENABLE_PRESENT_PROFILING
     perf_pending.clear_us += micros() - perf_start;
 #endif
 }
@@ -245,13 +263,13 @@ void Framebuffer::drawPixel(
     int16_t y,
     uint16_t color) {
 
-#if NV3047_ENABLE_PERF_COUNTERS
+#if NV3047_ENABLE_PRIMITIVE_PROFILING
     const uint32_t perf_start = micros();
 #endif
 
     Blitters::drawPixel(cached_draw_buffer, x, y, color);
 
-#if NV3047_ENABLE_PERF_COUNTERS
+#if NV3047_ENABLE_PRIMITIVE_PROFILING
     perf_pending.draw_us += micros() - perf_start;
     ++perf_pending.draw_calls;
 #endif
@@ -264,13 +282,13 @@ void Framebuffer::fillRect(
     int16_t h,
     uint16_t color) {
 
-#if NV3047_ENABLE_PERF_COUNTERS
+#if NV3047_ENABLE_PRIMITIVE_PROFILING
     const uint32_t perf_start = micros();
 #endif
 
     Blitters::fillRect(cached_draw_buffer, x, y, w, h, color);
 
-#if NV3047_ENABLE_PERF_COUNTERS
+#if NV3047_ENABLE_PRIMITIVE_PROFILING
     perf_pending.draw_us += micros() - perf_start;
     ++perf_pending.draw_calls;
 #endif
@@ -282,13 +300,13 @@ void Framebuffer::drawHLine(
     int16_t w,
     uint16_t color) {
 
-#if NV3047_ENABLE_PERF_COUNTERS
+#if NV3047_ENABLE_PRIMITIVE_PROFILING
     const uint32_t perf_start = micros();
 #endif
 
     Blitters::drawHLine(cached_draw_buffer, x, y, w, color);
 
-#if NV3047_ENABLE_PERF_COUNTERS
+#if NV3047_ENABLE_PRIMITIVE_PROFILING
     perf_pending.draw_us += micros() - perf_start;
     ++perf_pending.draw_calls;
 #endif
@@ -300,13 +318,13 @@ void Framebuffer::drawVLine(
     int16_t h,
     uint16_t color) {
 
-#if NV3047_ENABLE_PERF_COUNTERS
+#if NV3047_ENABLE_PRIMITIVE_PROFILING
     const uint32_t perf_start = micros();
 #endif
 
     Blitters::drawVLine(cached_draw_buffer, x, y, h, color);
 
-#if NV3047_ENABLE_PERF_COUNTERS
+#if NV3047_ENABLE_PRIMITIVE_PROFILING
     perf_pending.draw_us += micros() - perf_start;
     ++perf_pending.draw_calls;
 #endif
@@ -319,13 +337,13 @@ void Framebuffer::drawRect(
     int16_t h,
     uint16_t color) {
 
-#if NV3047_ENABLE_PERF_COUNTERS
+#if NV3047_ENABLE_PRIMITIVE_PROFILING
     const uint32_t perf_start = micros();
 #endif
 
     Blitters::drawRect(cached_draw_buffer, x, y, w, h, color);
 
-#if NV3047_ENABLE_PERF_COUNTERS
+#if NV3047_ENABLE_PRIMITIVE_PROFILING
     perf_pending.draw_us += micros() - perf_start;
     ++perf_pending.draw_calls;
 #endif
@@ -338,7 +356,7 @@ void Framebuffer::drawBitmap(
     int16_t h,
     const uint16_t* bitmap) {
 
-#if NV3047_ENABLE_PERF_COUNTERS
+#if NV3047_ENABLE_PRIMITIVE_PROFILING
     const uint32_t perf_start = micros();
 #endif
 
@@ -350,7 +368,7 @@ void Framebuffer::drawBitmap(
         h,
         bitmap);
 
-#if NV3047_ENABLE_PERF_COUNTERS
+#if NV3047_ENABLE_PRIMITIVE_PROFILING
     perf_pending.draw_us += micros() - perf_start;
     ++perf_pending.draw_calls;
 #endif
