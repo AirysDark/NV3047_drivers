@@ -42,6 +42,13 @@ jobs:
             --fqbn esp32:esp32:esp32s3 \
             --library . \
             .github/sketches/LocalDriverMode
+      - name: Compile local driver mode with performance counters
+        run: |
+          arduino-cli compile \
+            --fqbn esp32:esp32:esp32s3 \
+            --build-property compiler.cpp.extra_flags="-DNV3047_ENABLE_PERF_COUNTERS=1" \
+            --library . \
+            .github/sketches/LocalDriverMode
 
       - name: Compile takeover - memory include first
         run: |
