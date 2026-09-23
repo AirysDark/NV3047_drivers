@@ -44,6 +44,7 @@ bool Framebuffer::init(esp_lcd_panel_handle_t panelHandle) {
 
     if (result != ESP_OK) {
         memory.release();
+        cached_draw_buffer = nullptr;
         panel_handle = nullptr;
         return false;
     }
