@@ -7,6 +7,10 @@
 #include <driver/spi_master.h>
 #include <esp_heap_caps.h>
 
+#ifndef NV3047_ENABLE_PERF_COUNTERS
+#define NV3047_ENABLE_PERF_COUNTERS 0
+#endif
+
 namespace Config {
     constexpr uint16_t SCREEN_WIDTH = 480;
     constexpr uint16_t SCREEN_HEIGHT = 272;
