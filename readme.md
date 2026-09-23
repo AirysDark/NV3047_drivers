@@ -18,6 +18,12 @@ V3 keeps the verified V2 hardware behaviour and targets the load-dependent rende
 - Preserved the existing full-frame `esp_lcd_panel_draw_bitmap()` presentation path for controlled comparison against V2.
 - Preserved external-provider `swap_buffers()`, `begin_frame()`, and `service()` semantics; V3 does not alter the memory-manager contract.
 - Updated CI to compile `driver_overhaul_v3` in driver-only mode and both external-memory include orders.
+- Cached the `Framebuffer*` inside `NV3047_Driver` after successful initialization so high-level drawing wrappers no longer repeatedly traverse `hardware->getCanvas()`.
+- Added common-case unclipped fast paths for rectangles and lines while retaining clipped fallbacks.
+- Reworked `drawRect()` so its bounds/clipping logic is handled once instead of invoking four separately validated public line calls.
+- Unrolled the 32-bit `fillSpan()` bulk loop four writes at a time for long spans, with remainder handling retained.
+- Specialized the default two-buffer local role swap to avoid modulo while preserving generic behavior for more than two buffers.
+- Added optional driver performance counters, disabled by default, for clear/draw/present profiling.
 
 ### Why the draw-buffer cache matters
 
@@ -181,6 +187,58 @@ It also tracks:
 - last frame interval in microseconds,
 - approximate presentation FPS.
 
+## V3 performance counters
+
+V3 can profile the rendering/presentation path without changing touch, colour, or RGB configuration. Counters are disabled by default, so normal builds do not execute the `micros()` instrumentation.
+
+Enable them at compile time with:
+
+```text
+-DNV3047_ENABLE_PERF_COUNTERS=1
+```
+
+After a successful `present()`, read the most recently completed frame:
+
+```cpp
+Framebuffer* canvas = display.getCanvas();
+
+if (canvas) {
+    const FramebufferPerfCounters& perf =
+        canvas->getPerfCounters();
+
+    Serial.print("clear_us=");
+    Serial.println(perf.clear_us);
+
+    Serial.print("draw_us=");
+    Serial.println(perf.draw_us);
+
+    Serial.print("draw_calls=");
+    Serial.println(perf.draw_calls);
+
+    Serial.print("present_wait_us=");
+    Serial.println(perf.present_wait_us);
+
+    Serial.print("panel_draw_us=");
+    Serial.println(perf.panel_draw_us);
+
+    Serial.print("local_swap_us=");
+    Serial.println(perf.local_swap_us);
+
+    Serial.print("provider_swap_us=");
+    Serial.println(perf.provider_swap_us);
+
+    Serial.print("draw_buffer_refresh_us=");
+    Serial.println(perf.draw_buffer_refresh_us);
+
+    Serial.print("total_present_us=");
+    Serial.println(perf.total_present_us);
+
+    Serial.print("present_failures=");
+    Serial.println(perf.present_failures);
+}
+```
+
+The counters separate geometry work from the full-screen `esp_lcd_panel_draw_bitmap()` call. That allows the next real-panel benchmark to determine whether the remaining frame ceiling is dominated by rendering, cadence wait, panel copy/presentation, buffer-role swapping, or draw-buffer refresh.
 ## Arduino IDE configuration
 
 Use **Arduino-ESP32 core 2.0.17**.
@@ -589,7 +647,7 @@ The current default design intentionally keeps the ESP-IDF RGB driver's own fram
 
 Further V3 experiments can investigate:
 
-1. profiling `esp_lcd_panel_draw_bitmap()` separately from rendering,
+1. using the built-in V3 performance counters to profile `esp_lcd_panel_draw_bitmap()` separately from rendering,
 2. direct/zero-copy RGB framebuffer ownership,
 3. hardware frame-event synchronization,
 4. dirty-region presentation,
