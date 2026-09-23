@@ -3,10 +3,12 @@
 
 #include <esp_lcd_panel_ops.h>
 #include <freertos/FreeRTOS.h>
+#include <string.h>
 #include <freertos/task.h>
 
 Framebuffer::Framebuffer()
     : panel_handle(nullptr),
+      cached_draw_buffer(nullptr),
       last_swap_micros(0),
       last_frame_time_us(0),
       frame_count(0) {}
@@ -18,8 +20,15 @@ bool Framebuffer::init(esp_lcd_panel_handle_t panelHandle) {
     last_swap_micros = 0;
     last_frame_time_us = 0;
     frame_count = 0;
+    cached_draw_buffer = nullptr;
 
     if (!memory.init()) {
+        panel_handle = nullptr;
+        return false;
+    }
+
+    if (!refreshDrawBuffer()) {
+        memory.release();
         panel_handle = nullptr;
         return false;
     }
@@ -42,8 +51,13 @@ bool Framebuffer::init(esp_lcd_panel_handle_t panelHandle) {
     return true;
 }
 
+bool Framebuffer::refreshDrawBuffer() {
+    cached_draw_buffer = memory.getDrawBuffer();
+    return cached_draw_buffer != nullptr;
+}
+
 bool Framebuffer::swap() {
-    if (!isReady()) return false;
+    if (!isReady() || !cached_draw_buffer) return false;
 
     const uint32_t target_interval = Config::Framebuffer::FRAME_CADENCE_US;
 
@@ -79,23 +93,42 @@ bool Framebuffer::swap() {
         0,
         Config::SCREEN_WIDTH,
         Config::SCREEN_HEIGHT,
-        memory.getDrawBuffer());
+        cached_draw_buffer);
 
     if (result != ESP_OK) {
         return false;
     }
 
     memory.swapBuffers();
+
+    // The draw-buffer role changes only at presentation. Resolve the new
+    // pointer once here; all drawing calls for the next frame use this cache.
+    if (!refreshDrawBuffer()) {
+        return false;
+    }
+
     ++frame_count;
     return true;
 }
 
 void Framebuffer::clear(uint16_t color) {
-    uint16_t* draw_buffer = memory.getDrawBuffer();
+    uint16_t* draw_buffer = cached_draw_buffer;
     if (!draw_buffer) return;
 
     const size_t pixel_count =
         static_cast<size_t>(Config::SCREEN_WIDTH) * Config::SCREEN_HEIGHT;
+
+    // Common full-screen clears can use the optimized byte-fill path.
+    // 0x0000 and 0xFFFF are byte-uniform, so memset preserves RGB565 values.
+    if (color == 0x0000U) {
+        memset(draw_buffer, 0x00, pixel_count * sizeof(uint16_t));
+        return;
+    }
+
+    if (color == 0xFFFFU) {
+        memset(draw_buffer, 0xFF, pixel_count * sizeof(uint16_t));
+        return;
+    }
 
     if (Config::Framebuffer::USE_32BIT_CLEAR) {
         const uint32_t double_pixel =
@@ -118,23 +151,23 @@ void Framebuffer::clear(uint16_t color) {
 }
 
 void Framebuffer::drawPixel(int16_t x, int16_t y, uint16_t color) {
-    Blitters::drawPixel(memory.getDrawBuffer(), x, y, color);
+    Blitters::drawPixel(cached_draw_buffer, x, y, color);
 }
 
 void Framebuffer::fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color) {
-    Blitters::fillRect(memory.getDrawBuffer(), x, y, w, h, color);
+    Blitters::fillRect(cached_draw_buffer, x, y, w, h, color);
 }
 
 void Framebuffer::drawHLine(int16_t x, int16_t y, int16_t w, uint16_t color) {
-    Blitters::drawHLine(memory.getDrawBuffer(), x, y, w, color);
+    Blitters::drawHLine(cached_draw_buffer, x, y, w, color);
 }
 
 void Framebuffer::drawVLine(int16_t x, int16_t y, int16_t h, uint16_t color) {
-    Blitters::drawVLine(memory.getDrawBuffer(), x, y, h, color);
+    Blitters::drawVLine(cached_draw_buffer, x, y, h, color);
 }
 
 void Framebuffer::drawRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color) {
-    Blitters::drawRect(memory.getDrawBuffer(), x, y, w, h, color);
+    Blitters::drawRect(cached_draw_buffer, x, y, w, h, color);
 }
 
 void Framebuffer::drawBitmap(
@@ -143,7 +176,7 @@ void Framebuffer::drawBitmap(
     int16_t w,
     int16_t h,
     const uint16_t* bitmap) {
-    Blitters::drawBitmap(memory.getDrawBuffer(), x, y, w, h, bitmap);
+    Blitters::drawBitmap(cached_draw_buffer, x, y, w, h, bitmap);
 }
 
 bool Framebuffer::isReady() const {
