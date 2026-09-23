@@ -153,11 +153,24 @@ void MemoryManager::swapBuffers() {
         return;
     }
 
+    // The production configuration uses two buffers. This constant branch
+    // folds away under Core 2.0.17 and avoids modulo in the dominant path
+    // while retaining generic rotation for BUFFER_COUNT > 2.
+    if (Config::MemoryManager::BUFFER_COUNT == 2U) {
+        front_index = draw_index;
+        draw_index ^= 1U;
+        return;
+    }
+
     front_index = draw_index;
-    draw_index = (draw_index + 1U) % Config::MemoryManager::BUFFER_COUNT;
+    draw_index =
+        (draw_index + 1U) %
+        Config::MemoryManager::BUFFER_COUNT;
 
     if (draw_index == front_index) {
-        draw_index = (draw_index + 1U) % Config::MemoryManager::BUFFER_COUNT;
+        draw_index =
+            (draw_index + 1U) %
+            Config::MemoryManager::BUFFER_COUNT;
     }
 }
 
