@@ -150,7 +150,8 @@ bool TouchDriver::getTouch(uint16_t &x, uint16_t &y) {
     // XPT2046 raw Y channel -> display X axis
     // XPT2046 raw X channel -> display Y axis
     //
-    // Both destination axes are reversed for the mounted panel orientation.
+    // Real-panel verification confirms the raw axes are swapped relative
+    // to the display axes, but neither destination axis requires inversion.
     // Keep each calibration range attached to its original raw channel.
     uint32_t mapped_x =
         (static_cast<uint32_t>(
@@ -173,11 +174,8 @@ bool TouchDriver::getTouch(uint16_t &x, uint16_t &y) {
         mapped_y = Config::SCREEN_HEIGHT - 1U;
     }
 
-    x = static_cast<uint16_t>(
-        (Config::SCREEN_WIDTH - 1U) - mapped_x);
-
-    y = static_cast<uint16_t>(
-        (Config::SCREEN_HEIGHT - 1U) - mapped_y);
+    x = static_cast<uint16_t>(mapped_x);
+    y = static_cast<uint16_t>(mapped_y);
 
     return true;
 }
