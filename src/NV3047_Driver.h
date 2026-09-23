@@ -5,11 +5,12 @@
 class NV3047_Driver {
 private:
     NV3047* hardware = nullptr;
+    Framebuffer* canvas = nullptr;
 
 public:
     bool begin(NV3047* hw_instance);
 
-    bool isReady() const { return hardware != nullptr; }
+    bool isReady() const { return hardware != nullptr && canvas != nullptr; }
     bool isExternalMemoryManagerActive() const;
 
     void setBrightness(uint8_t percentage);
