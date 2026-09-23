@@ -291,6 +291,10 @@ namespace Config {
     namespace Framebuffer {
         constexpr bool USE_32BIT_CLEAR = true;
 
+        // Small spans stay on the compact 32-bit writer. Longer all-black or
+        // all-white spans can use libc memset efficiently.
+        constexpr size_t SPAN_MEMSET_THRESHOLD_PIXELS = 32;
+
         static_assert(PCLK_FREQ_HZ > 0, "Pixel clock must be greater than zero");
 
         constexpr uint32_t PANEL_TOTAL_WIDTH =
