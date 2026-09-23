@@ -13,6 +13,16 @@ bool SPI_Master::init() {
         return true;
     }
 
+    // Touch and TF share SCLK/MOSI/MISO. Keep the SD device explicitly
+    // deselected before the touch SPI bus is initialized.
+    gpio_reset_pin(static_cast<gpio_num_t>(Config::PIN_SD_CS));
+    gpio_set_direction(
+        static_cast<gpio_num_t>(Config::PIN_SD_CS),
+        GPIO_MODE_OUTPUT);
+    gpio_set_level(
+        static_cast<gpio_num_t>(Config::PIN_SD_CS),
+        1);
+
     spi_bus_config_t buscfg = {};
     buscfg.sclk_io_num = Config::PIN_SPI_SCLK;
     buscfg.mosi_io_num = Config::PIN_SPI_MOSI;
