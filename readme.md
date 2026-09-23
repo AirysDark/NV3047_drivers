@@ -2,7 +2,7 @@
 
 A low-level display, touch, framebuffer, and hardware abstraction driver for the **Elecrow CrowPanel 4.3" DIS06043H** on the **ESP32-S3**.
 
-This branch is intentionally built around **Arduino-ESP32 core 2.0.17**. The driver now has one fixed hardware configuration: the established Legacy Working display baseline from the original `main` implementation. There is no selectable hardware-profile system. A separate suspected V2.1 mapping is retained later in this README for reference only and is not compiled into the driver.
+This branch is intentionally built around **Arduino-ESP32 core 2.0.17**. The RGB display path keeps the established working baseline, while the XPT2046 touch path now uses the **physically verified** CrowPanel 4.3 bus: GPIO12 SCLK, GPIO11 MOSI, GPIO13 MISO, GPIO0 CS, GPIO36 IRQ, with TF/SD CS on GPIO10 held HIGH during touch startup.
 
 ## What changed in v2
 
@@ -18,7 +18,7 @@ This branch is intentionally built around **Arduino-ESP32 core 2.0.17**. The dri
 - Standardized application brightness usage to `0-100%`.
 - Added framebuffer memory and frame timing diagnostics.
 - Reused the DisplayDriver DMA fill buffer instead of allocating/freeing it on every fill.
-- Restored the dedicated ESP-IDF XPT2046 touch transport used by the Legacy Working baseline.
+- Repaired the XPT2046 transport using the physically verified hardware bus and corrected receive-byte alignment.
 - Removed the selectable hardware-profile system so there is one unambiguous active pin map.
 - Updated stale examples and package metadata.
 - Documented PCB UART1, GPIO_D and I2S pin conflicts against the fixed active map.
@@ -176,14 +176,15 @@ R: 14, 21, 47, 48, 45
 Touch pins:
 
 ```text
-SCLK   = GPIO20
-MOSI   = GPIO19
-MISO   = -1
-TP_CS  = GPIO18
+SCLK   = GPIO12
+MOSI   = GPIO11
+MISO   = GPIO13
+TP_CS  = GPIO0
 TP_IRQ = GPIO36
+TF_CS  = GPIO10
 ```
 
-Touch uses the dedicated ESP-IDF SPI device path on `SPI3_HOST` at 1 MHz with hardware-controlled chip select, matching the old `main` transport architecture.
+Touch uses the ESP-IDF SPI device path on `SPI2_HOST` at **2.5 MHz**, mode 0, queue depth 7, with hardware-controlled touch chip select. GPIO10 is driven HIGH before the touch bus starts so the TF/SD device remains deselected.
 
 The fixed colour constants remain:
 
@@ -335,28 +336,56 @@ Serial.println(canvas.getApproxFPS());
 
 ## Touch diagnostics
 
-The current driver has one fixed XPT2046 touch path:
+The active XPT2046 path has now been matched to direct hardware testing on this exact board:
 
 ```text
-GPIO20 = TP_CLK
-GPIO19 = TP_DIN / MOSI
-MISO   = not assigned (-1)
-GPIO18 = TP_CS
+GPIO12 = TP_CLK / SCLK
+GPIO11 = TP_DIN / MOSI
+GPIO13 = TP_OUT / MISO
+GPIO0  = TP_CS
 GPIO36 = TP_IRQ
+GPIO10 = TF/SD_CS
 ```
 
-The transport uses the ESP-IDF SPI device API on `SPI3_HOST` with hardware-controlled chip select. The XPT2046 command bytes remain `0x94` / `0xD4`.
+Transport settings:
 
-The touch layer keeps the overhaul improvements:
+```text
+SPI host = SPI2_HOST
+Clock    = 2.5 MHz
+Mode     = 0
+Queue    = 7
+Flags    = 0
+```
 
-- median filtering with the configured odd sample count,
-- raw touch diagnostic access,
-- calibration bounds from `Config::Touch`,
-- mapped coordinates clamped to X `0-479` and Y `0-271`.
+Before SPI initialization the driver drives GPIO10 HIGH to keep the TF/SD device deselected.
 
-The current touch-data issue being investigated does not change the documented fixed pin map above. The suspected GPIO12/11/13 + GPIO0 mapping is retained separately in the V2.1 reference section rather than as executable alternate configuration.
+The baseline XPT2046 commands are:
 
-See `examples/Touch-test/touch-test.ino`.
+```text
+X = 0x90
+Y = 0xD0
+```
+
+The 24-bit response is decoded from RX bytes 1 and 2:
+
+```cpp
+uint16_t raw =
+    ((((uint16_t)rx_data[1] << 8) |
+       ((uint16_t)rx_data[2])) >> 3) & 0x0FFF;
+```
+
+Direct hardware testing also confirmed that `0x94 / 0xD4` return live ADC data, but the driver uses `0x90 / 0xD0` as the clean baseline.
+
+Calibration remains independent of the transport repair:
+
+```text
+RAW_X_MIN = 300
+RAW_X_MAX = 3850
+RAW_Y_MIN = 250
+RAW_Y_MAX = 3750
+```
+
+GPIO36 IRQ is active LOW and is independent of the coordinate data path.
 
 ## PCB-verified external expansion ports
 
@@ -392,7 +421,7 @@ Config::Expansion::GPIO_D0 = 38;
 Config::Expansion::GPIO_D1 = 37;
 ```
 
-In the fixed active configuration, GPIO18 is used as TP_CS, so UART1 RX is not available to applications. GPIO17 remains available for UART1 TX.
+The repaired touch path does not consume GPIO18 or GPIO17, so both UART1 pins remain available to applications.
 
 ## PCB-verified I2S pins
 
@@ -412,21 +441,22 @@ Config::I2S::BCLK  = 35;
 Config::I2S::SDIN  = 20;
 ```
 
-The NV3047 driver does not yet initialize the audio path. In the fixed active configuration, GPIO19 and GPIO20 are consumed by touch, so LRCLK and SDIN are not available for I2S. GPIO35 remains unclaimed by the touch path.
+The NV3047 driver does not yet initialize the audio path. The repaired touch path does not consume GPIO19, GPIO20, or GPIO35, so the documented I2S pins remain available to applications.
 
 ## SD/TF status
 
-The current fixed hardware configuration does not enable the TF/microSD interface:
+The TF interface is still disabled for mounting during touch recovery, but its physical shared-bus pins are recorded:
 
 ```cpp
 Config::SDCard::ENABLED = false;
-Config::PIN_SD_CS   = -1;
-Config::PIN_SD_CLK  = -1;
-Config::PIN_SD_MOSI = -1;
-Config::PIN_SD_MISO = -1;
+
+Config::PIN_SD_CS   = 10;
+Config::PIN_SD_CLK  = 12;
+Config::PIN_SD_MOSI = 11;
+Config::PIN_SD_MISO = 13;
 ```
 
-The existing `SDCardDriver` API remains in the library, but `isConfigured()` is false under the current fixed configuration. The suspected V2.1 TF wiring is retained only in the documentation-only V2.1 section above.
+GPIO10 is forced HIGH before touch SPI initialization so the TF device stays deselected and cannot contend for GPIO13 MISO.
 
 ## Optional NV3047_memorymanager takeover
 
