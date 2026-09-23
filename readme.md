@@ -10,7 +10,7 @@ This branch is intentionally built around **Arduino-ESP32 core 2.0.17**. The RGB
 - Framebuffer allocation is now re-init safe and cannot leave dangling pointers after a partial allocation failure.
 - Framebuffer and display memory-owning classes are non-copyable.
 - Fixed potentially unaligned 32-bit writes in horizontal and rectangle blitters.
-- Fixed touch mapping so the physically swapped XPT2046 axes are scaled into the correct display dimensions, reversed for the mounted panel orientation, and clamped inside X `0-479` and Y `0-271`.
+- Fixed touch mapping so the physically swapped XPT2046 axes are scaled directly into the correct display dimensions with verified forward directions, clamped inside X `0-479` and Y `0-271`.
 - Replaced mean-of-three touch filtering with median-of-three filtering.
 - Added raw touch diagnostic access and a `Touch-test` example.
 - `NV3047_Driver::begin()` now returns `bool` and propagates initialization failures.
@@ -394,11 +394,11 @@ raw Y + RAW_Y calibration -> display X (0..479)
 raw X + RAW_X calibration -> display Y (0..271)
 ```
 
-For the current physical panel mounting, both destination directions are reversed:
+Real-panel testing confirmed that no destination-axis inversion is required after the raw-axis swap:
 
 ```text
-screen X = inverted raw Y
-screen Y = inverted raw X
+screen X = mapped raw Y
+screen Y = mapped raw X
 ```
 
 The expected physical movement is:
@@ -421,7 +421,7 @@ bottom-right -> X=479 Y=271
 
 Do not swap the calibration constants themselves. `RAW_Y_MIN/MAX` remain attached to the raw Y channel even though that channel drives display X, and `RAW_X_MIN/MAX` remain attached to the raw X channel even though that channel drives display Y.
 
-If later real-panel calibration proves that only one destination direction is reversed, change only that destination-axis inversion. Do not alter the verified SPI transport while tuning orientation.
+The axis swap and forward directions are now verified on the real panel. Future calibration work should adjust only the raw min/max ranges if edge accuracy needs tuning; do not alter the verified SPI transport or reintroduce destination-axis inversion.
 
 GPIO36 IRQ is active LOW and is independent of the coordinate data path.
 
