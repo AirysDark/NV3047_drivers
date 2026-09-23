@@ -24,6 +24,13 @@ V3 keeps the verified V2 hardware behaviour and targets the load-dependent rende
 - Unrolled the 32-bit `fillSpan()` bulk loop four writes at a time for long spans, with remainder handling retained.
 - Specialized the default two-buffer local role swap to avoid modulo while preserving generic behavior for more than two buffers.
 - Added optional driver performance counters, disabled by default, for clear/draw/present profiling.
+- Split profiling into low-overhead presentation/frame timing and optional per-primitive timing.
+- Added `frame_work_us` and `frame_interval_us` so a no-touch benchmark can decompose work outside `present()` from the panel-present path.
+- Added contiguous full-width `fillRect()` fills using a `size_t` pixel count.
+- Added long black/white span `memset()` fast paths with a compile-time threshold.
+- Paired `drawRect()` vertical edges into one row walk for better PSRAM locality.
+- Inlined the high-level `NV3047_Driver` drawing wrappers.
+- Inlined `Framebuffer -> Blitters` forwarding in normal builds while retaining instrumented wrappers when primitive profiling is enabled.
 
 ### Why the draw-buffer cache matters
 
@@ -189,9 +196,25 @@ It also tracks:
 
 ## V3 performance counters
 
-V3 can profile the rendering/presentation path without changing touch, colour, or RGB configuration. Counters are disabled by default, so normal builds do not execute the `micros()` instrumentation.
+V3 can profile the rendering/presentation path without changing touch, colour, or RGB configuration. Profiling is split so the main throughput test can measure presentation with very low overhead instead of calling `micros()` around every object.
 
-Enable them at compile time with:
+For the recommended low-overhead presentation run, enable:
+
+```text
+-DNV3047_ENABLE_PRESENT_PROFILING=1
+-DNV3047_ENABLE_PRIMITIVE_PROFILING=0
+```
+
+This records frame/presentation timing plus one full-screen clear measurement, but does **not** wrap every primitive in `micros()`.
+
+For a dedicated primitive-cost experiment only, enable:
+
+```text
+-DNV3047_ENABLE_PRESENT_PROFILING=1
+-DNV3047_ENABLE_PRIMITIVE_PROFILING=1
+```
+
+The legacy umbrella switch is still supported and enables both modes:
 
 ```text
 -DNV3047_ENABLE_PERF_COUNTERS=1
@@ -205,6 +228,12 @@ Framebuffer* canvas = display.getCanvas();
 if (canvas) {
     const FramebufferPerfCounters& perf =
         canvas->getPerfCounters();
+
+    Serial.print("frame_work_us=");
+    Serial.println(perf.frame_work_us);
+
+    Serial.print("frame_interval_us=");
+    Serial.println(perf.frame_interval_us);
 
     Serial.print("clear_us=");
     Serial.println(perf.clear_us);
@@ -239,6 +268,8 @@ if (canvas) {
 ```
 
 The counters separate geometry work from the full-screen `esp_lcd_panel_draw_bitmap()` call. That allows the next real-panel benchmark to determine whether the remaining frame ceiling is dominated by rendering, cadence wait, panel copy/presentation, buffer-role swapping, or draw-buffer refresh.
+
+`frame_work_us` measures time from the end of the previous successful present to entry into the next `present()`. `frame_interval_us` is the existing present-start to present-start interval. With primitive profiling disabled, `draw_us` and `draw_calls` remain zero by design.
 ## Arduino IDE configuration
 
 Use **Arduino-ESP32 core 2.0.17**.
