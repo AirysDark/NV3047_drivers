@@ -145,19 +145,26 @@ bool TouchDriver::getTouch(uint16_t &x, uint16_t &y) {
         raw_y = Config::Touch::RAW_Y_MAX;
     }
 
+    // Physical CrowPanel 4.3 touch orientation:
+    //
+    // XPT2046 raw Y channel -> display X axis
+    // XPT2046 raw X channel -> display Y axis
+    //
+    // Both destination axes are reversed for the mounted panel orientation.
+    // Keep each calibration range attached to its original raw channel.
     uint32_t mapped_x =
         (static_cast<uint32_t>(
-             raw_x - Config::Touch::RAW_X_MIN) *
+             raw_y - Config::Touch::RAW_Y_MIN) *
          (Config::SCREEN_WIDTH - 1U)) /
-        (Config::Touch::RAW_X_MAX -
-         Config::Touch::RAW_X_MIN);
+        (Config::Touch::RAW_Y_MAX -
+         Config::Touch::RAW_Y_MIN);
 
     uint32_t mapped_y =
         (static_cast<uint32_t>(
-             raw_y - Config::Touch::RAW_Y_MIN) *
+             raw_x - Config::Touch::RAW_X_MIN) *
          (Config::SCREEN_HEIGHT - 1U)) /
-        (Config::Touch::RAW_Y_MAX -
-         Config::Touch::RAW_Y_MIN);
+        (Config::Touch::RAW_X_MAX -
+         Config::Touch::RAW_X_MIN);
 
     if (mapped_x >= Config::SCREEN_WIDTH) {
         mapped_x = Config::SCREEN_WIDTH - 1U;
@@ -166,7 +173,9 @@ bool TouchDriver::getTouch(uint16_t &x, uint16_t &y) {
         mapped_y = Config::SCREEN_HEIGHT - 1U;
     }
 
-    x = static_cast<uint16_t>(mapped_x);
+    x = static_cast<uint16_t>(
+        (Config::SCREEN_WIDTH - 1U) - mapped_x);
+
     y = static_cast<uint16_t>(
         (Config::SCREEN_HEIGHT - 1U) - mapped_y);
 
