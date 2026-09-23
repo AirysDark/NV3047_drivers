@@ -42,6 +42,14 @@ jobs:
             --fqbn esp32:esp32:esp32s3 \
             --library . \
             .github/sketches/LocalDriverMode
+      - name: Compile local driver mode with present-only profiling
+        run: |
+          arduino-cli compile \
+            --fqbn esp32:esp32:esp32s3 \
+            --build-property compiler.cpp.extra_flags="-DNV3047_ENABLE_PRESENT_PROFILING=1 -DNV3047_ENABLE_PRIMITIVE_PROFILING=0" \
+            --library . \
+            .github/sketches/LocalDriverMode
+
       - name: Compile local driver mode with performance counters
         run: |
           arduino-cli compile \
