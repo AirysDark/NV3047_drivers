@@ -1,12 +1,12 @@
-name: Compile driver_overhaul_v2
+name: Compile driver_overhaul_v3
 
 on:
   push:
     branches:
-      - driver_overhaul_v2
+      - driver_overhaul_v3
   pull_request:
     branches:
-      - driver_overhaul_v2
+      - driver_overhaul_v3
 
 jobs:
   compile:
