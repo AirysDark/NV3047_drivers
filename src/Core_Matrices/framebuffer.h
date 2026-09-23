@@ -7,6 +7,19 @@
 #include "../Config.h"
 #include "MemoryManager.h"
 
+struct FramebufferPerfCounters {
+    uint32_t clear_us;
+    uint32_t draw_us;
+    uint32_t draw_calls;
+    uint32_t present_wait_us;
+    uint32_t panel_draw_us;
+    uint32_t local_swap_us;
+    uint32_t provider_swap_us;
+    uint32_t draw_buffer_refresh_us;
+    uint32_t total_present_us;
+    uint32_t present_failures;
+};
+
 class Framebuffer {
 public:
     Framebuffer();
@@ -36,6 +49,11 @@ public:
     uint32_t getLastFrameTimeUs() const { return last_frame_time_us; }
     float getApproxFPS() const;
 
+    const FramebufferPerfCounters& getPerfCounters() const {
+        return perf_last;
+    }
+    void resetPerfCounters();
+
     Framebuffer(const Framebuffer&) = delete;
     Framebuffer& operator=(const Framebuffer&) = delete;
 
@@ -45,6 +63,10 @@ private:
     esp_lcd_panel_handle_t panel_handle;
     MemoryManager memory;
     uint16_t* cached_draw_buffer;
+    bool ready_state;
+
+    FramebufferPerfCounters perf_pending;
+    FramebufferPerfCounters perf_last;
 
     uint32_t last_swap_micros;
     uint32_t last_frame_time_us;
