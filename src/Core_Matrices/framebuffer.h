@@ -6,6 +6,7 @@
 
 #include "../Config.h"
 #include "MemoryManager.h"
+#include "blitters.h"
 
 struct FramebufferPerfCounters {
     uint32_t frame_work_us;
@@ -32,12 +33,76 @@ public:
 
     void clear(uint16_t color = Config::COLOR_BLACK);
 
+#if NV3047_ENABLE_PRIMITIVE_PROFILING
     void drawPixel(int16_t x, int16_t y, uint16_t color);
     void fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color);
     void drawHLine(int16_t x, int16_t y, int16_t w, uint16_t color);
     void drawVLine(int16_t x, int16_t y, int16_t h, uint16_t color);
     void drawRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color);
     void drawBitmap(int16_t x, int16_t y, int16_t w, int16_t h, const uint16_t* bitmap);
+#else
+    inline void drawPixel(
+        int16_t x,
+        int16_t y,
+        uint16_t color) {
+
+        Blitters::drawPixel(cached_draw_buffer, x, y, color);
+    }
+
+    inline void fillRect(
+        int16_t x,
+        int16_t y,
+        int16_t w,
+        int16_t h,
+        uint16_t color) {
+
+        Blitters::fillRect(cached_draw_buffer, x, y, w, h, color);
+    }
+
+    inline void drawHLine(
+        int16_t x,
+        int16_t y,
+        int16_t w,
+        uint16_t color) {
+
+        Blitters::drawHLine(cached_draw_buffer, x, y, w, color);
+    }
+
+    inline void drawVLine(
+        int16_t x,
+        int16_t y,
+        int16_t h,
+        uint16_t color) {
+
+        Blitters::drawVLine(cached_draw_buffer, x, y, h, color);
+    }
+
+    inline void drawRect(
+        int16_t x,
+        int16_t y,
+        int16_t w,
+        int16_t h,
+        uint16_t color) {
+
+        Blitters::drawRect(cached_draw_buffer, x, y, w, h, color);
+    }
+
+    inline void drawBitmap(
+        int16_t x,
+        int16_t y,
+        int16_t w,
+        int16_t h,
+        const uint16_t* bitmap) {
+
+        Blitters::drawBitmap(
+            cached_draw_buffer,
+            x,
+            y,
+            w,
+            h,
+            bitmap);
+    }
+#endif
 
     // Returns the frame-local cached draw pointer. The cache is refreshed
     // only after a successful buffer-role swap, avoiding provider delegation
