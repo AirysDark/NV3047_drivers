@@ -1,8 +1,48 @@
-# NV3047 Display & HAL Driver Engine (v2.0.0 overhaul)
+# NV3047 Display & HAL Driver Engine (v3.0.0 performance overhaul)
 
 A low-level display, touch, framebuffer, and hardware abstraction driver for the **Elecrow CrowPanel 4.3" DIS06043H** on the **ESP32-S3**.
 
-This branch is intentionally built around **Arduino-ESP32 core 2.0.17**. The RGB display path keeps the established working baseline, while the XPT2046 touch path now uses the **physically verified** CrowPanel 4.3 bus: GPIO12 SCLK, GPIO11 MOSI, GPIO13 MISO, GPIO0 CS, GPIO36 IRQ, with TF/SD CS on GPIO10 held HIGH during touch startup.
+This branch is intentionally built around **Arduino-ESP32 core 2.0.17**. V3 is branched from the verified `driver_overhaul_v2` hardware baseline and focuses on rendering hot-path efficiency. The working RGB colour path, XPT2046 transport, touch orientation/calibration, and external-memory-provider ABI are intentionally preserved.
+
+## What changed in v3
+
+V3 keeps the verified V2 hardware behaviour and targets the load-dependent rendering overhead found by staged real-panel benchmarks.
+
+- Added a frame-local cached draw-buffer pointer inside `Framebuffer`.
+- Drawing primitives no longer call `MemoryManager::getDrawBuffer()` for every object/primitive.
+- External-memory mode therefore avoids repeated `provider->is_ready()` and `provider->draw_buffer()` crossings during normal drawing.
+- The draw pointer is resolved during initialization and refreshed once after each successful buffer-role swap.
+- `Framebuffer::getDrawBuffer()` now exposes the already-cached current draw pointer.
+- Added optimized `memset()` fast paths for full-screen black (`0x0000`) and white (`0xFFFF`) clears.
+- Kept the existing 32-bit clear path for all other colours.
+- Preserved the existing full-frame `esp_lcd_panel_draw_bitmap()` presentation path for controlled comparison against V2.
+- Preserved external-provider `swap_buffers()`, `begin_frame()`, and `service()` semantics; V3 does not alter the memory-manager contract.
+- Updated CI to compile `driver_overhaul_v3` in driver-only mode and both external-memory include orders.
+
+### Why the draw-buffer cache matters
+
+V2 resolves the draw buffer separately for each framebuffer drawing primitive. In local mode this is inexpensive, but with an external memory provider each lookup can cross the provider ABI through readiness and draw-buffer callbacks. Under heavy object counts that lookup count scales with the number of drawing calls.
+
+V3 changes the hot path conceptually from:
+
+```text
+fillRect  -> getDrawBuffer -> provider checks
+drawRect  -> getDrawBuffer -> provider checks
+drawHLine -> getDrawBuffer -> provider checks
+drawVLine -> getDrawBuffer -> provider checks
+... repeated for every object
+```
+
+to:
+
+```text
+start/init frame -> resolve draw buffer once
+all drawing      -> use cached pointer directly
+present          -> swap buffer roles
+next frame       -> resolve new draw buffer once
+```
+
+This change is deliberately isolated from touch, colour packing, RGB timing, and the external memory manager implementation.
 
 ## What changed in v2
 
@@ -133,7 +173,7 @@ It exposes diagnostic information for configured buffer count, buffer size, tota
 
 ### Framebuffer
 
-`Framebuffer` is now responsible for rendering and presentation state rather than raw allocation ownership. It draws into the MemoryManager back buffer and swaps buffer identities after a successful panel presentation.
+`Framebuffer` is responsible for rendering and presentation state rather than raw allocation ownership. In V3 it caches the active draw-buffer pointer for the lifetime of each frame, so drawing primitives operate directly on that pointer. After a successful presentation and buffer-role swap, the cache is refreshed once for the next frame.
 
 It also tracks:
 
@@ -547,12 +587,14 @@ The integration remains compatible with Arduino-ESP32 core **2.0.17** and the dr
 
 The current default design intentionally keeps the ESP-IDF RGB driver's own framebuffer behaviour plus the configured application framebuffer pool because that is the stable Core 2.0.17 configuration.
 
-A future experimental branch can investigate:
+Further V3 experiments can investigate:
 
-1. direct/zero-copy RGB framebuffer ownership,
-2. hardware frame-event synchronization,
-3. dirty-region presentation,
-4. additional low-level geometry primitives.
+1. profiling `esp_lcd_panel_draw_bitmap()` separately from rendering,
+2. direct/zero-copy RGB framebuffer ownership,
+3. hardware frame-event synchronization,
+4. dirty-region presentation,
+5. whether provider `service()` can safely be deferred or throttled without changing the external manager contract,
+6. additional low-level geometry primitives.
 
 Those changes should be benchmarked on the real panel rather than folded into the stable driver path blindly.
 
