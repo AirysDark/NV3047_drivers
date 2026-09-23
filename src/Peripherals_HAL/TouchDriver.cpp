@@ -54,12 +54,13 @@ bool TouchDriver::transfer16(uint8_t cmd, uint16_t &value) {
     }
 
     const uint16_t high_byte =
-        static_cast<uint16_t>(rx_data[0]) << 8;
+        static_cast<uint16_t>(rx_data[1]) << 8;
     const uint16_t low_byte =
-        static_cast<uint16_t>(rx_data[1]);
+        static_cast<uint16_t>(rx_data[2]);
 
     value =
-        static_cast<uint16_t>((high_byte | low_byte) >> 3);
+        static_cast<uint16_t>(
+            ((high_byte | low_byte) >> 3) & 0x0FFFU);
 
     return true;
 }
